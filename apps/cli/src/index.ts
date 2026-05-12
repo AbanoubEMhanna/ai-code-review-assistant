@@ -15,7 +15,10 @@ function makeOpts(cmd: {
   provider: string;
   output?: string;
 }): ReviewOptions {
-  const provider = cmd.provider === "lmstudio" ? "lmstudio" : "ollama";
+  const provider = cmd.provider.trim().toLowerCase();
+  if (provider !== "ollama" && provider !== "lmstudio") {
+    throw new Error(`Invalid provider "${cmd.provider}". Use "ollama" or "lmstudio".`);
+  }
   return { model: cmd.model, host: cmd.host, provider };
 }
 

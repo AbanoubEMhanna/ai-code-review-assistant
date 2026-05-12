@@ -13,6 +13,20 @@ interface RawReviewResult {
   }>;
 }
 
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs = 60_000
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function chatCompletions(
   host: string,
   model: string,
@@ -20,7 +34,7 @@ async function chatCompletions(
   maxTokens: number
 ): Promise<string> {
   const url = `${host}/v1/chat/completions`;
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ model, messages, max_tokens: maxTokens, stream: false }),
@@ -44,7 +58,7 @@ async function ollamaChat(
   maxTokens: number
 ): Promise<string> {
   const url = `${host}/api/chat`;
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -63,12 +77,27 @@ async function ollamaChat(
   return data.message.content;
 }
 
+function assertRawReviewResult(value: unknown): asserts value is RawReviewResult {
+  if (!value || typeof value !== "object") {
+    throw new Error("Invalid AI response: expected object");
+  }
+  const v = value as Partial<RawReviewResult>;
+  if (typeof v.summary !== "string") {
+    throw new Error("Invalid AI response: missing or non-string summary");
+  }
+  if (!Array.isArray(v.comments)) {
+    throw new Error("Invalid AI response: comments must be an array");
+  }
+}
+
 function parseReview(raw: string): RawReviewResult {
   const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
   try {
-    return JSON.parse(cleaned) as RawReviewResult;
-  } catch {
-    throw new Error(`Could not parse AI response as JSON.\n\nRaw response:\n${raw}`);
+    const parsed: unknown = JSON.parse(cleaned);
+    assertRawReviewResult(parsed);
+    return parsed;
+  } catch (err) {
+    throw new Error(`Could not parse AI response as JSON.\n\nRaw response:\n${raw}\n\nReason: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
