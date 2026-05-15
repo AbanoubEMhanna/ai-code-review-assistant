@@ -8,4 +8,3 @@ Local AI code review assistant architecture notes.
 - Optional API and web dashboard for saved reviews.
 - AI package for LM Studio/Ollama adapters and review prompts.
 - Shared package for report schemas, severity levels, and file annotations.
-
