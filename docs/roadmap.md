@@ -11,4 +11,3 @@
 - Add rules for security, performance, tests, and maintainability.
 - Add optional web dashboard and persisted review history.
 - Add GitHub Actions integration later.
-
