@@ -1,13 +1,20 @@
 #!/usr/bin/env node
 import { program } from "commander";
 import { reviewDiff } from "@ai-review/ai";
-import type { ReviewOptions, ReviewReport } from "@ai-review/shared";
+import type { ReviewOptions, ReviewReport, ReviewSeverity } from "@ai-review/shared";
 import { getStagedDiff, getBranchDiff, getFileDiff } from "./git.js";
-import { printReport, saveMarkdown } from "./output.js";
+import { printReport, printJson, saveMarkdown } from "./output.js";
 
 const DEFAULT_HOST = process.env["AI_HOST"] ?? "http://localhost:11434";
 const DEFAULT_MODEL = process.env["AI_MODEL"] ?? "qwen3:latest";
 const DEFAULT_PROVIDER = (process.env["AI_PROVIDER"] ?? "ollama") as ReviewOptions["provider"];
+
+const SEVERITY_RANK: Record<ReviewSeverity, number> = {
+  high: 3,
+  medium: 2,
+  low: 1,
+  info: 0,
+};
 
 function makeOpts(cmd: {
   model: string;
@@ -31,13 +38,23 @@ function makeOpts(cmd: {
   return opts;
 }
 
+function parseFailOn(value: string): ReviewSeverity {
+  const v = value.trim().toLowerCase();
+  if (v === "high" || v === "medium" || v === "low" || v === "info") return v;
+  throw new Error(`--fail-on must be one of: high, medium, low, info. Got "${value}"`);
+}
+
 async function runReview(
   diff: string,
   diffSource: string,
   opts: ReviewOptions,
-  outputFile: string | undefined
+  outputFile: string | undefined,
+  json: boolean,
+  failOn: ReviewSeverity | undefined
 ): Promise<void> {
-  console.log(`Reviewing ${diffSource} with ${opts.model} via ${opts.provider} (${opts.host})…`);
+  if (!json) {
+    console.log(`Reviewing ${diffSource} with ${opts.model} via ${opts.provider} (${opts.host})…`);
+  }
   const { summary, comments } = await reviewDiff(diff, diffSource, opts);
 
   const stats = {
@@ -57,11 +74,28 @@ async function runReview(
     stats,
   };
 
-  printReport(report);
+  if (json) {
+    printJson(report);
+  } else {
+    printReport(report);
+  }
 
   if (outputFile) {
     saveMarkdown(report, outputFile);
-    console.log(`Report saved to ${outputFile}`);
+    if (!json) console.log(`Report saved to ${outputFile}`);
+  }
+
+  if (failOn !== undefined) {
+    const threshold = SEVERITY_RANK[failOn];
+    const exceeded = comments.some((c) => SEVERITY_RANK[c.severity] >= threshold);
+    if (exceeded) {
+      if (!json) {
+        console.error(
+          `\nFailed: issues at severity "${failOn}" or above were found (use --fail-on to configure).`
+        );
+      }
+      process.exit(1);
+    }
   }
 }
 
@@ -76,33 +110,56 @@ const sharedOptions = (cmd: ReturnType<typeof program.command>) =>
     .option("-H, --host <url>", "AI host URL", DEFAULT_HOST)
     .option("-p, --provider <provider>", "Provider: ollama or lmstudio", DEFAULT_PROVIDER)
     .option("-t, --max-tokens <number>", "Maximum tokens for the AI response (default: 4096)")
-    .option("-o, --output <file>", "Save Markdown report to file");
+    .option("-o, --output <file>", "Save Markdown report to file")
+    .option("--json", "Output review as JSON (suppresses formatted output)")
+    .option(
+      "--fail-on <severity>",
+      "Exit with code 1 if any issue at this severity or above is found (high|medium|low|info)"
+    );
+
+type SharedOpts = {
+  model: string;
+  host: string;
+  provider: string;
+  output?: string;
+  maxTokens?: string;
+  json?: boolean;
+  failOn?: string;
+};
+
+sharedOptions(program.command("staged").description("Review staged changes (git add)")).action(
+  async (opts: SharedOpts) => {
+    const diff = await getStagedDiff().catch(die);
+    const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
+    await runReview(diff, "staged changes", makeOpts(opts), opts.output, !!opts.json, failOn).catch(
+      die
+    );
+  }
+);
 
 sharedOptions(
-  program
-    .command("staged")
-    .description("Review staged changes (git add)")
-).action(async (opts: { model: string; host: string; provider: string; output?: string; maxTokens?: string }) => {
-  const diff = await getStagedDiff().catch(die);
-  await runReview(diff, "staged changes", makeOpts(opts), opts.output).catch(die);
-});
-
-sharedOptions(
-  program
-    .command("branch <base>")
-    .description("Review commits on HEAD not in <base>")
-).action(async (base: string, opts: { model: string; host: string; provider: string; output?: string; maxTokens?: string }) => {
+  program.command("branch <base>").description("Review commits on HEAD not in <base>")
+).action(async (base: string, opts: SharedOpts) => {
   const diff = await getBranchDiff(base).catch(die);
-  await runReview(diff, `diff vs ${base}`, makeOpts(opts), opts.output).catch(die);
+  const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
+  await runReview(diff, `diff vs ${base}`, makeOpts(opts), opts.output, !!opts.json, failOn).catch(
+    die
+  );
 });
 
 sharedOptions(
-  program
-    .command("file <path>")
-    .description("Review unstaged or staged changes to a specific file")
-).action(async (filePath: string, opts: { model: string; host: string; provider: string; output?: string; maxTokens?: string }) => {
+  program.command("file <path>").description("Review unstaged or staged changes to a specific file")
+).action(async (filePath: string, opts: SharedOpts) => {
   const diff = await getFileDiff(filePath).catch(die);
-  await runReview(diff, `file: ${filePath}`, makeOpts(opts), opts.output).catch(die);
+  const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
+  await runReview(
+    diff,
+    `file: ${filePath}`,
+    makeOpts(opts),
+    opts.output,
+    !!opts.json,
+    failOn
+  ).catch(die);
 });
 
 function die(err: unknown): never {
