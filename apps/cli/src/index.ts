@@ -14,12 +14,21 @@ function makeOpts(cmd: {
   host: string;
   provider: string;
   output?: string;
+  maxTokens?: string;
 }): ReviewOptions {
   const provider = cmd.provider.trim().toLowerCase();
   if (provider !== "ollama" && provider !== "lmstudio") {
     throw new Error(`Invalid provider "${cmd.provider}". Use "ollama" or "lmstudio".`);
   }
-  return { model: cmd.model, host: cmd.host, provider };
+  const opts: ReviewOptions = { model: cmd.model, host: cmd.host, provider };
+  if (cmd.maxTokens !== undefined) {
+    const n = parseInt(cmd.maxTokens, 10);
+    if (isNaN(n) || n < 1) {
+      throw new Error(`--max-tokens must be a positive integer, got "${cmd.maxTokens}"`);
+    }
+    opts.maxTokens = n;
+  }
+  return opts;
 }
 
 async function runReview(
@@ -66,13 +75,14 @@ const sharedOptions = (cmd: ReturnType<typeof program.command>) =>
     .option("-m, --model <model>", "Model name", DEFAULT_MODEL)
     .option("-H, --host <url>", "AI host URL", DEFAULT_HOST)
     .option("-p, --provider <provider>", "Provider: ollama or lmstudio", DEFAULT_PROVIDER)
+    .option("-t, --max-tokens <number>", "Maximum tokens for the AI response (default: 4096)")
     .option("-o, --output <file>", "Save Markdown report to file");
 
 sharedOptions(
   program
     .command("staged")
     .description("Review staged changes (git add)")
-).action(async (opts: { model: string; host: string; provider: string; output?: string }) => {
+).action(async (opts: { model: string; host: string; provider: string; output?: string; maxTokens?: string }) => {
   const diff = await getStagedDiff().catch(die);
   await runReview(diff, "staged changes", makeOpts(opts), opts.output).catch(die);
 });
@@ -81,7 +91,7 @@ sharedOptions(
   program
     .command("branch <base>")
     .description("Review commits on HEAD not in <base>")
-).action(async (base: string, opts: { model: string; host: string; provider: string; output?: string }) => {
+).action(async (base: string, opts: { model: string; host: string; provider: string; output?: string; maxTokens?: string }) => {
   const diff = await getBranchDiff(base).catch(die);
   await runReview(diff, `diff vs ${base}`, makeOpts(opts), opts.output).catch(die);
 });
@@ -90,7 +100,7 @@ sharedOptions(
   program
     .command("file <path>")
     .description("Review unstaged or staged changes to a specific file")
-).action(async (filePath: string, opts: { model: string; host: string; provider: string; output?: string }) => {
+).action(async (filePath: string, opts: { model: string; host: string; provider: string; output?: string; maxTokens?: string }) => {
   const diff = await getFileDiff(filePath).catch(die);
   await runReview(diff, `file: ${filePath}`, makeOpts(opts), opts.output).catch(die);
 });
