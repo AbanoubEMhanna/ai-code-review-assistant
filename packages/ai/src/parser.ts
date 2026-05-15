@@ -23,6 +23,34 @@ function assertRawReviewResult(value: unknown): asserts value is RawReviewResult
   if (!Array.isArray(v.comments)) {
     throw new Error("Invalid AI response: comments must be an array");
   }
+  for (const [i, c] of v.comments.entries()) {
+    if (!c || typeof c !== "object") {
+      throw new Error(`Invalid AI response: comments[${i}] must be an object`);
+    }
+    const comment = c as Record<string, unknown>;
+    if (typeof comment.file !== "string" || comment.file.trim() === "") {
+      throw new Error(`Invalid AI response: comments[${i}].file must be a non-empty string`);
+    }
+    if (typeof comment.message !== "string") {
+      throw new Error(`Invalid AI response: comments[${i}].message must be a string`);
+    }
+    if (typeof comment.severity !== "string") {
+      throw new Error(`Invalid AI response: comments[${i}].severity must be a string`);
+    }
+    if (typeof comment.category !== "string") {
+      throw new Error(`Invalid AI response: comments[${i}].category must be a string`);
+    }
+    if ("line" in comment && comment.line != null && !Number.isInteger(comment.line)) {
+      throw new Error(`Invalid AI response: comments[${i}].line must be an integer or null`);
+    }
+    if (
+      "suggestion" in comment &&
+      comment.suggestion != null &&
+      typeof comment.suggestion !== "string"
+    ) {
+      throw new Error(`Invalid AI response: comments[${i}].suggestion must be a string or null`);
+    }
+  }
 }
 
 export function parseReview(raw: string): RawReviewResult {
@@ -36,7 +64,7 @@ export function parseReview(raw: string): RawReviewResult {
     return parsed;
   } catch (err) {
     throw new Error(
-      `Could not parse AI response as JSON.\n\nRaw response:\n${raw}\n\nReason: ${err instanceof Error ? err.message : String(err)}`
+      `Could not parse AI response as JSON. Reason: ${err instanceof Error ? err.message : String(err)} (raw length: ${raw.length})`
     );
   }
 }

@@ -60,4 +60,88 @@ describe("parseReview", () => {
   it("throws on a non-object response", () => {
     expect(() => parseReview(JSON.stringify(null))).toThrow("expected object");
   });
+
+  it("throws when a comment entry is not an object", () => {
+    expect(() => parseReview(JSON.stringify({ summary: "ok", comments: ["bad"] }))).toThrow(
+      "comments[0] must be an object"
+    );
+  });
+
+  it("throws when a comment is missing file", () => {
+    expect(() =>
+      parseReview(
+        JSON.stringify({
+          summary: "ok",
+          comments: [{ message: "m", severity: "low", category: "style" }],
+        })
+      )
+    ).toThrow("comments[0].file must be a non-empty string");
+  });
+
+  it("throws when a comment has empty file", () => {
+    expect(() =>
+      parseReview(
+        JSON.stringify({
+          summary: "ok",
+          comments: [{ file: "  ", message: "m", severity: "low", category: "style" }],
+        })
+      )
+    ).toThrow("comments[0].file must be a non-empty string");
+  });
+
+  it("throws when a comment is missing message", () => {
+    expect(() =>
+      parseReview(
+        JSON.stringify({
+          summary: "ok",
+          comments: [{ file: "src/a.ts", severity: "low", category: "style" }],
+        })
+      )
+    ).toThrow("comments[0].message must be a string");
+  });
+
+  it("throws when a comment has a non-integer line", () => {
+    expect(() =>
+      parseReview(
+        JSON.stringify({
+          summary: "ok",
+          comments: [
+            { file: "src/a.ts", message: "m", severity: "low", category: "style", line: 1.5 },
+          ],
+        })
+      )
+    ).toThrow("comments[0].line must be an integer or null");
+  });
+
+  it("throws when a comment has a non-string suggestion", () => {
+    expect(() =>
+      parseReview(
+        JSON.stringify({
+          summary: "ok",
+          comments: [
+            {
+              file: "src/a.ts",
+              message: "m",
+              severity: "low",
+              category: "style",
+              suggestion: 42,
+            },
+          ],
+        })
+      )
+    ).toThrow("comments[0].suggestion must be a string or null");
+  });
+
+  it("does not include the raw response in parse errors", () => {
+    const secret = "SUPER_SECRET_TOKEN=abc123";
+    const err = (() => {
+      try {
+        parseReview(`not json containing ${secret}`);
+      } catch (e) {
+        return e as Error;
+      }
+    })();
+    expect(err?.message).not.toContain(secret);
+    expect(err?.message).toContain("raw length:");
+  });
 });
