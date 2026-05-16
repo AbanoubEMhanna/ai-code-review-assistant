@@ -33,7 +33,7 @@ export class ReviewHistoryStore {
     }
   }
 
-  list(opts: { limit?: number } = {}): StoredReview[] {
+  list(opts: { limit?: number; diffSource?: string } = {}): StoredReview[] {
     let files: string[];
     try {
       files = readdirSync(this.dir).filter((f) => f.endsWith(".json"));
@@ -41,14 +41,22 @@ export class ReviewHistoryStore {
       return [];
     }
     files.sort().reverse();
-    if (opts.limit) files = files.slice(0, opts.limit);
-    return files.flatMap((f) => {
+
+    let reviews = files.flatMap((f) => {
       try {
         return [JSON.parse(readFileSync(join(this.dir, f), "utf8")) as StoredReview];
       } catch {
         return [];
       }
     });
+
+    if (opts.diffSource !== undefined) {
+      reviews = reviews.filter((r) => r.diffSource === opts.diffSource);
+    }
+    if (opts.limit && opts.limit > 0) {
+      reviews = reviews.slice(0, opts.limit);
+    }
+    return reviews;
   }
 
   delete(id: string): boolean {
