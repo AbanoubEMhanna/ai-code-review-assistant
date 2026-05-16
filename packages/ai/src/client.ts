@@ -1,17 +1,6 @@
 import type { ReviewComment, ReviewOptions } from "@ai-review/shared";
 import { SYSTEM_PROMPT, buildUserPrompt } from "./prompts.js";
-
-interface RawReviewResult {
-  summary: string;
-  comments: Array<{
-    file: string;
-    line?: number | null;
-    severity: ReviewComment["severity"];
-    category: ReviewComment["category"];
-    message: string;
-    suggestion?: string | null;
-  }>;
-}
+import { parseReview } from "./parser.js";
 
 async function fetchWithTimeout(
   url: string,
@@ -75,30 +64,6 @@ async function ollamaChat(
   const data = (await res.json()) as { message: { content: string } };
   if (!data.message?.content) throw new Error("Empty response from Ollama");
   return data.message.content;
-}
-
-function assertRawReviewResult(value: unknown): asserts value is RawReviewResult {
-  if (!value || typeof value !== "object") {
-    throw new Error("Invalid AI response: expected object");
-  }
-  const v = value as Partial<RawReviewResult>;
-  if (typeof v.summary !== "string") {
-    throw new Error("Invalid AI response: missing or non-string summary");
-  }
-  if (!Array.isArray(v.comments)) {
-    throw new Error("Invalid AI response: comments must be an array");
-  }
-}
-
-function parseReview(raw: string): RawReviewResult {
-  const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
-  try {
-    const parsed: unknown = JSON.parse(cleaned);
-    assertRawReviewResult(parsed);
-    return parsed;
-  } catch (err) {
-    throw new Error(`Could not parse AI response as JSON.\n\nRaw response:\n${raw}\n\nReason: ${err instanceof Error ? err.message : String(err)}`);
-  }
 }
 
 export async function reviewDiff(

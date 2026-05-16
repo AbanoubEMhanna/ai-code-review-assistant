@@ -18,7 +18,9 @@ const SEVERITY_ICONS = {
 
 export function printReport(report: ReviewReport): void {
   console.log("\n" + chalk.bold.underline("AI Code Review Report"));
-  console.log(chalk.dim(`Model: ${report.model}  |  Source: ${report.diffSource}  |  ${report.generatedAt}`));
+  console.log(
+    chalk.dim(`Model: ${report.model}  |  Source: ${report.diffSource}  |  ${report.generatedAt}`)
+  );
   console.log();
   console.log(chalk.bold("Summary"));
   console.log(report.summary);
@@ -32,7 +34,9 @@ export function printReport(report: ReviewReport): void {
     stats.info > 0 ? chalk.gray(`${stats.info} info`) : null,
   ].filter(Boolean);
 
-  console.log(chalk.bold("Issues: ") + (parts.length ? parts.join(chalk.dim("  ·  ")) : chalk.green("none")));
+  console.log(
+    chalk.bold("Issues: ") + (parts.length ? parts.join(chalk.dim("  ·  ")) : chalk.green("none"))
+  );
 
   if (report.comments.length === 0) {
     console.log(chalk.green("\nNo issues found. "));
@@ -67,7 +71,9 @@ export function buildMarkdown(report: ReviewReport): string {
   const lines: string[] = [];
 
   lines.push(`# AI Code Review Report`);
-  lines.push(`\n**Model:** ${report.model}  \n**Source:** ${report.diffSource}  \n**Generated:** ${report.generatedAt}`);
+  lines.push(
+    `\n**Model:** ${report.model}  \n**Source:** ${report.diffSource}  \n**Generated:** ${report.generatedAt}`
+  );
   lines.push(`\n## Summary\n\n${report.summary}`);
   lines.push(`\n## Stats\n`);
   lines.push(`| Severity | Count |`);
@@ -97,7 +103,9 @@ export function buildMarkdown(report: ReviewReport): string {
     for (const c of comments) {
       const icon = { high: "🔴", medium: "🟡", low: "🔵", info: "⚪" }[c.severity];
       const loc = c.line != null ? ` (line ${c.line})` : "";
-      lines.push(`- ${icon} **${c.severity.toUpperCase()}**${loc} \`${c.category}\` — ${c.message}`);
+      lines.push(
+        `- ${icon} **${c.severity.toUpperCase()}**${loc} \`${c.category}\` — ${c.message}`
+      );
       if (c.suggestion) {
         lines.push(`  > **Suggestion:** ${c.suggestion}`);
       }
@@ -111,4 +119,8 @@ export function buildMarkdown(report: ReviewReport): string {
 export function saveMarkdown(report: ReviewReport, outputPath: string): void {
   const md = buildMarkdown(report);
   writeFileSync(outputPath, md, "utf8");
+}
+
+export function printJson(report: ReviewReport): void {
+  process.stdout.write(JSON.stringify(report, null, 2) + "\n");
 }
