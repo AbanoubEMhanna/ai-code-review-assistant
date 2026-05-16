@@ -3,7 +3,8 @@ import { program } from "commander";
 import { reviewDiff } from "@ai-review/ai";
 import type { ReviewOptions, ReviewReport } from "@ai-review/shared";
 import { getStagedDiff, getBranchDiff, getFileDiff } from "./git.js";
-import { printReport, saveMarkdown } from "./output.js";
+import { printReport, printHistoryStats, saveMarkdown } from "./output.js";
+import type { HistoryStats } from "./output.js";
 import { ReviewHistoryStore } from "./history-store.js";
 
 const DEFAULT_HOST = process.env["AI_HOST"] ?? "http://localhost:11434";
@@ -88,57 +89,85 @@ const sharedOptions = (cmd: ReturnType<typeof program.command>) =>
     .option("-o, --output <file>", "Save Markdown report to file")
     .option("--no-save", "Do not save this review to history");
 
-sharedOptions(
-  program
-    .command("staged")
-    .description("Review staged changes (git add)")
-).action(async (opts: { model: string; host: string; provider: string; output?: string; maxTokens?: string; save: boolean }) => {
-  const diff = await getStagedDiff().catch(die);
-  await runReview(diff, "staged changes", makeOpts(opts), opts.output, !opts.save).catch(die);
-});
+sharedOptions(program.command("staged").description("Review staged changes (git add)")).action(
+  async (opts: {
+    model: string;
+    host: string;
+    provider: string;
+    output?: string;
+    maxTokens?: string;
+    save: boolean;
+  }) => {
+    const diff = await getStagedDiff().catch(die);
+    await runReview(diff, "staged changes", makeOpts(opts), opts.output, !opts.save).catch(die);
+  }
+);
 
 sharedOptions(
-  program
-    .command("branch <base>")
-    .description("Review commits on HEAD not in <base>")
-).action(async (base: string, opts: { model: string; host: string; provider: string; output?: string; maxTokens?: string; save: boolean }) => {
-  const diff = await getBranchDiff(base).catch(die);
-  await runReview(diff, `diff vs ${base}`, makeOpts(opts), opts.output, !opts.save).catch(die);
-});
+  program.command("branch <base>").description("Review commits on HEAD not in <base>")
+).action(
+  async (
+    base: string,
+    opts: {
+      model: string;
+      host: string;
+      provider: string;
+      output?: string;
+      maxTokens?: string;
+      save: boolean;
+    }
+  ) => {
+    const diff = await getBranchDiff(base).catch(die);
+    await runReview(diff, `diff vs ${base}`, makeOpts(opts), opts.output, !opts.save).catch(die);
+  }
+);
 
 sharedOptions(
-  program
-    .command("file <path>")
-    .description("Review unstaged or staged changes to a specific file")
-).action(async (filePath: string, opts: { model: string; host: string; provider: string; output?: string; maxTokens?: string; save: boolean }) => {
-  const diff = await getFileDiff(filePath).catch(die);
-  await runReview(diff, `file: ${filePath}`, makeOpts(opts), opts.output, !opts.save).catch(die);
-});
+  program.command("file <path>").description("Review unstaged or staged changes to a specific file")
+).action(
+  async (
+    filePath: string,
+    opts: {
+      model: string;
+      host: string;
+      provider: string;
+      output?: string;
+      maxTokens?: string;
+      save: boolean;
+    }
+  ) => {
+    const diff = await getFileDiff(filePath).catch(die);
+    await runReview(diff, `file: ${filePath}`, makeOpts(opts), opts.output, !opts.save).catch(die);
+  }
+);
 
 // ─── history subcommand group ──────────────────────────────────────────────
 
-const historyCmd = program
-  .command("history")
-  .description("Manage saved review history");
+const historyCmd = program.command("history").description("Manage saved review history");
 
 historyCmd
   .command("list")
   .description("List saved reviews (newest first)")
   .option("-n, --limit <number>", "Number of reviews to show", "20")
-  .action((opts: { limit: string }) => {
+  .option("-s, --source <pattern>", "Filter by diff source (exact match)")
+  .action((opts: { limit: string; source?: string }) => {
     const limit = parseInt(opts.limit, 10);
-    const reviews = store.list({ limit: isNaN(limit) ? 20 : limit });
+    const reviews = store.list({
+      limit: isNaN(limit) ? 20 : limit,
+      ...(opts.source !== undefined ? { diffSource: opts.source } : {}),
+    });
     if (reviews.length === 0) {
       console.log("No saved reviews.");
       return;
     }
     for (const r of reviews) {
       const date = new Date(r.generatedAt).toLocaleString();
-      const badge = r.stats.high > 0
-        ? `🔴 ${r.stats.high}H`
-        : r.stats.medium > 0
-          ? `🟡 ${r.stats.medium}M`
-          : "✅";
+      const badge =
+        r.stats.high > 0
+          ? `🔴 ${r.stats.high}H`
+          : r.stats.medium > 0
+            ? `🟡 ${r.stats.medium}M`
+            : "✅";
       console.log(`${r.id}  ${badge}  ${r.diffSource}  (${r.model}, ${date})`);
     }
   });
@@ -167,6 +196,50 @@ historyCmd
     }
     saveMarkdown(review, opts.output);
     console.log(`Exported to ${opts.output}`);
+  });
+
+historyCmd
+  .command("stats")
+  .description("Show aggregate statistics across saved reviews")
+  .option("-s, --source <pattern>", "Restrict stats to a specific diff source (exact match)")
+  .action((opts: { source?: string }) => {
+    const reviews = store.list(opts.source !== undefined ? { diffSource: opts.source } : {});
+    if (reviews.length === 0) {
+      console.log("No saved reviews.");
+      return;
+    }
+
+    const bySeverity = { high: 0, medium: 0, low: 0, info: 0 };
+    const byCategory: Record<string, number> = {};
+    const sourceCounts: Record<string, number> = {};
+
+    for (const r of reviews) {
+      bySeverity.high += r.stats.high;
+      bySeverity.medium += r.stats.medium;
+      bySeverity.low += r.stats.low;
+      bySeverity.info += r.stats.info;
+      sourceCounts[r.diffSource] = (sourceCounts[r.diffSource] ?? 0) + 1;
+      for (const c of r.comments) {
+        byCategory[c.category] = (byCategory[c.category] ?? 0) + 1;
+      }
+    }
+
+    const totalIssues = bySeverity.high + bySeverity.medium + bySeverity.low + bySeverity.info;
+    const topSources = Object.entries(sourceCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([source, count]) => ({ source, count }));
+
+    const histStats: HistoryStats = {
+      reviewCount: reviews.length,
+      totalIssues,
+      bySeverity,
+      byCategory,
+      topSources,
+      avgIssuesPerReview: reviews.length > 0 ? totalIssues / reviews.length : 0,
+    };
+
+    printHistoryStats(histStats);
   });
 
 historyCmd
