@@ -27,6 +27,7 @@ export interface ReviewReport {
 export interface ReviewOptions {
   model: string;
   host: string;
-  provider: "ollama" | "lmstudio";
+  provider: "ollama" | "lmstudio" | "anthropic";
   maxTokens?: number;
+  apiKey?: string;
 }

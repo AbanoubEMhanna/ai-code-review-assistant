@@ -27,6 +27,43 @@ async function fetchWithTimeout(
   }
 }
 
+async function anthropicChat(
+  apiKey: string,
+  model: string,
+  systemPrompt: string,
+  userMessage: string,
+  maxTokens: number
+): Promise<string> {
+  const res = await fetchWithTimeout(
+    "https://api.anthropic.com/v1/messages",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: maxTokens,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userMessage }],
+      }),
+    },
+    120_000
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Anthropic API request failed (${res.status}): ${text}`);
+  }
+  const data = (await res.json()) as {
+    content: Array<{ type: string; text: string }>;
+  };
+  const content = data.content.find((c) => c.type === "text")?.text;
+  if (!content) throw new Error("Empty response from Anthropic");
+  return content;
+}
+
 async function chatCompletions(
   host: string,
   model: string,
@@ -91,13 +128,18 @@ function assertRawReviewResult(value: unknown): asserts value is RawReviewResult
 }
 
 function parseReview(raw: string): RawReviewResult {
-  const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
+  const cleaned = raw
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```\s*$/, "")
+    .trim();
   try {
     const parsed: unknown = JSON.parse(cleaned);
     assertRawReviewResult(parsed);
     return parsed;
   } catch (err) {
-    throw new Error(`Could not parse AI response as JSON.\n\nRaw response:\n${raw}\n\nReason: ${err instanceof Error ? err.message : String(err)}`);
+    throw new Error(
+      `Could not parse AI response as JSON.\n\nRaw response:\n${raw}\n\nReason: ${err instanceof Error ? err.message : String(err)}`
+    );
   }
 }
 
@@ -117,7 +159,20 @@ export async function reviewDiff(
   const maxTokens = opts.maxTokens ?? 4096;
 
   let raw: string;
-  if (opts.provider === "lmstudio") {
+  if (opts.provider === "anthropic") {
+    if (!opts.apiKey) {
+      throw new Error(
+        "Anthropic provider requires an API key. Set ANTHROPIC_API_KEY or use --api-key."
+      );
+    }
+    raw = await anthropicChat(
+      opts.apiKey,
+      opts.model,
+      SYSTEM_PROMPT,
+      buildUserPrompt(diff, diffSource),
+      maxTokens
+    );
+  } else if (opts.provider === "lmstudio") {
     raw = await chatCompletions(opts.host, opts.model, messages, maxTokens);
   } else {
     try {
