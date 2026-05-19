@@ -152,8 +152,12 @@ historyCmd
   .option("-s, --source <pattern>", "Filter by diff source (exact match)")
   .action((opts: { limit: string; source?: string }) => {
     const limit = parseInt(opts.limit, 10);
+    if (isNaN(limit) || limit < 1) {
+      console.error(`Invalid --limit "${opts.limit}". Use a positive integer.`);
+      process.exit(1);
+    }
     const reviews = store.list({
-      limit: isNaN(limit) ? 20 : limit,
+      limit,
       ...(opts.source !== undefined ? { diffSource: opts.source } : {}),
     });
     if (reviews.length === 0) {
