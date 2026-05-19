@@ -34,11 +34,29 @@ function assertRawReviewResult(value: unknown): asserts value is RawReviewResult
     if (typeof comment.message !== "string") {
       throw new Error(`Invalid AI response: comments[${i}].message must be a string`);
     }
+    const VALID_SEVERITIES = ["high", "medium", "low", "info"] as const;
+    const VALID_CATEGORIES = [
+      "bug",
+      "security",
+      "performance",
+      "maintainability",
+      "style",
+    ] as const;
     if (typeof comment.severity !== "string") {
       throw new Error(`Invalid AI response: comments[${i}].severity must be a string`);
     }
+    if (!(VALID_SEVERITIES as readonly string[]).includes(comment.severity)) {
+      throw new Error(
+        `Invalid AI response: comments[${i}].severity must be one of ${VALID_SEVERITIES.join(", ")}, got "${comment.severity}"`
+      );
+    }
     if (typeof comment.category !== "string") {
       throw new Error(`Invalid AI response: comments[${i}].category must be a string`);
+    }
+    if (!(VALID_CATEGORIES as readonly string[]).includes(comment.category)) {
+      throw new Error(
+        `Invalid AI response: comments[${i}].category must be one of ${VALID_CATEGORIES.join(", ")}, got "${comment.category}"`
+      );
     }
     if ("line" in comment && comment.line != null && !Number.isInteger(comment.line)) {
       throw new Error(`Invalid AI response: comments[${i}].line must be an integer or null`);
