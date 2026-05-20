@@ -1,14 +1,20 @@
 #!/usr/bin/env node
+import { writeFileSync } from "node:fs";
 import { program } from "commander";
 import { reviewDiff } from "@ai-review/ai";
 import type { ReviewOptions, ReviewReport } from "@ai-review/shared";
 import { getStagedDiff, getBranchDiff, getFileDiff } from "./git.js";
 import { printReport, saveMarkdown } from "./output.js";
 import { ReviewHistoryStore } from "./history-store.js";
+import { loadConfig, getConfigFilePath, type AiReviewConfig } from "./config.js";
 
-const DEFAULT_HOST = process.env["AI_HOST"] ?? "http://localhost:11434";
-const DEFAULT_MODEL = process.env["AI_MODEL"] ?? "qwen3:latest";
-const DEFAULT_PROVIDER = (process.env["AI_PROVIDER"] ?? "ollama") as ReviewOptions["provider"];
+const fileConfig: AiReviewConfig = loadConfig();
+
+const DEFAULT_HOST = process.env["AI_HOST"] ?? fileConfig.host ?? "http://localhost:11434";
+const DEFAULT_MODEL = process.env["AI_MODEL"] ?? fileConfig.model ?? "qwen3:latest";
+const DEFAULT_PROVIDER = (process.env["AI_PROVIDER"] ??
+  fileConfig.provider ??
+  "ollama") as ReviewOptions["provider"];
 
 function makeOpts(cmd: {
   model: string;
@@ -88,38 +94,61 @@ const sharedOptions = (cmd: ReturnType<typeof program.command>) =>
     .option("-o, --output <file>", "Save Markdown report to file")
     .option("--no-save", "Do not save this review to history");
 
-sharedOptions(
-  program
-    .command("staged")
-    .description("Review staged changes (git add)")
-).action(async (opts: { model: string; host: string; provider: string; output?: string; maxTokens?: string; save: boolean }) => {
-  const diff = await getStagedDiff().catch(die);
-  await runReview(diff, "staged changes", makeOpts(opts), opts.output, !opts.save).catch(die);
-});
+sharedOptions(program.command("staged").description("Review staged changes (git add)")).action(
+  async (opts: {
+    model: string;
+    host: string;
+    provider: string;
+    output?: string;
+    maxTokens?: string;
+    save: boolean;
+  }) => {
+    const diff = await getStagedDiff().catch(die);
+    await runReview(diff, "staged changes", makeOpts(opts), opts.output, !opts.save).catch(die);
+  }
+);
 
 sharedOptions(
-  program
-    .command("branch <base>")
-    .description("Review commits on HEAD not in <base>")
-).action(async (base: string, opts: { model: string; host: string; provider: string; output?: string; maxTokens?: string; save: boolean }) => {
-  const diff = await getBranchDiff(base).catch(die);
-  await runReview(diff, `diff vs ${base}`, makeOpts(opts), opts.output, !opts.save).catch(die);
-});
+  program.command("branch <base>").description("Review commits on HEAD not in <base>")
+).action(
+  async (
+    base: string,
+    opts: {
+      model: string;
+      host: string;
+      provider: string;
+      output?: string;
+      maxTokens?: string;
+      save: boolean;
+    }
+  ) => {
+    const diff = await getBranchDiff(base).catch(die);
+    await runReview(diff, `diff vs ${base}`, makeOpts(opts), opts.output, !opts.save).catch(die);
+  }
+);
 
 sharedOptions(
-  program
-    .command("file <path>")
-    .description("Review unstaged or staged changes to a specific file")
-).action(async (filePath: string, opts: { model: string; host: string; provider: string; output?: string; maxTokens?: string; save: boolean }) => {
-  const diff = await getFileDiff(filePath).catch(die);
-  await runReview(diff, `file: ${filePath}`, makeOpts(opts), opts.output, !opts.save).catch(die);
-});
+  program.command("file <path>").description("Review unstaged or staged changes to a specific file")
+).action(
+  async (
+    filePath: string,
+    opts: {
+      model: string;
+      host: string;
+      provider: string;
+      output?: string;
+      maxTokens?: string;
+      save: boolean;
+    }
+  ) => {
+    const diff = await getFileDiff(filePath).catch(die);
+    await runReview(diff, `file: ${filePath}`, makeOpts(opts), opts.output, !opts.save).catch(die);
+  }
+);
 
 // ─── history subcommand group ──────────────────────────────────────────────
 
-const historyCmd = program
-  .command("history")
-  .description("Manage saved review history");
+const historyCmd = program.command("history").description("Manage saved review history");
 
 historyCmd
   .command("list")
@@ -134,11 +163,12 @@ historyCmd
     }
     for (const r of reviews) {
       const date = new Date(r.generatedAt).toLocaleString();
-      const badge = r.stats.high > 0
-        ? `🔴 ${r.stats.high}H`
-        : r.stats.medium > 0
-          ? `🟡 ${r.stats.medium}M`
-          : "✅";
+      const badge =
+        r.stats.high > 0
+          ? `🔴 ${r.stats.high}H`
+          : r.stats.medium > 0
+            ? `🟡 ${r.stats.medium}M`
+            : "✅";
       console.log(`${r.id}  ${badge}  ${r.diffSource}  (${r.model}, ${date})`);
     }
   });
@@ -188,6 +218,53 @@ historyCmd
   .action(() => {
     const n = store.clear();
     console.log(`Cleared ${n} review(s) from history.`);
+  });
+
+// ─── config subcommand group ───────────────────────────────────────────────
+
+const configCmd = program.command("config").description("Manage ai-review configuration");
+
+configCmd
+  .command("show")
+  .description("Show the active configuration and its source")
+  .action(() => {
+    const configPath = getConfigFilePath();
+    const effective = {
+      model: DEFAULT_MODEL,
+      host: DEFAULT_HOST,
+      provider: DEFAULT_PROVIDER,
+      ...(fileConfig.maxTokens !== undefined ? { maxTokens: fileConfig.maxTokens } : {}),
+    };
+
+    console.log("\nEffective configuration:");
+    console.log(JSON.stringify(effective, null, 2));
+
+    if (configPath) {
+      console.log(`\nConfig file: ${configPath}`);
+    } else {
+      console.log("\nNo config file found — using defaults and environment variables.");
+      console.log(`  Create .ai-reviewrc.json in the project root to set persistent defaults.`);
+    }
+  });
+
+configCmd
+  .command("init")
+  .description("Create a .ai-reviewrc.json with the current defaults")
+  .action(() => {
+    const configPath = getConfigFilePath();
+    if (configPath) {
+      console.error(`Config file already exists: ${configPath}`);
+      console.error("Delete it first or edit it directly.");
+      process.exit(1);
+    }
+    const defaults: AiReviewConfig = {
+      model: DEFAULT_MODEL,
+      host: DEFAULT_HOST,
+      provider: DEFAULT_PROVIDER,
+    };
+    writeFileSync(".ai-reviewrc.json", JSON.stringify(defaults, null, 2) + "\n", "utf8");
+    console.log("Created .ai-reviewrc.json with current defaults.");
+    console.log("Edit it to set your preferred model, host, and provider.");
   });
 
 function die(err: unknown): never {
