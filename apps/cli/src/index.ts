@@ -88,38 +88,61 @@ const sharedOptions = (cmd: ReturnType<typeof program.command>) =>
     .option("-o, --output <file>", "Save Markdown report to file")
     .option("--no-save", "Do not save this review to history");
 
-sharedOptions(
-  program
-    .command("staged")
-    .description("Review staged changes (git add)")
-).action(async (opts: { model: string; host: string; provider: string; output?: string; maxTokens?: string; save: boolean }) => {
-  const diff = await getStagedDiff().catch(die);
-  await runReview(diff, "staged changes", makeOpts(opts), opts.output, !opts.save).catch(die);
-});
+sharedOptions(program.command("staged").description("Review staged changes (git add)")).action(
+  async (opts: {
+    model: string;
+    host: string;
+    provider: string;
+    output?: string;
+    maxTokens?: string;
+    save: boolean;
+  }) => {
+    const diff = await getStagedDiff().catch(die);
+    await runReview(diff, "staged changes", makeOpts(opts), opts.output, !opts.save).catch(die);
+  }
+);
 
 sharedOptions(
-  program
-    .command("branch <base>")
-    .description("Review commits on HEAD not in <base>")
-).action(async (base: string, opts: { model: string; host: string; provider: string; output?: string; maxTokens?: string; save: boolean }) => {
-  const diff = await getBranchDiff(base).catch(die);
-  await runReview(diff, `diff vs ${base}`, makeOpts(opts), opts.output, !opts.save).catch(die);
-});
+  program.command("branch <base>").description("Review commits on HEAD not in <base>")
+).action(
+  async (
+    base: string,
+    opts: {
+      model: string;
+      host: string;
+      provider: string;
+      output?: string;
+      maxTokens?: string;
+      save: boolean;
+    }
+  ) => {
+    const diff = await getBranchDiff(base).catch(die);
+    await runReview(diff, `diff vs ${base}`, makeOpts(opts), opts.output, !opts.save).catch(die);
+  }
+);
 
 sharedOptions(
-  program
-    .command("file <path>")
-    .description("Review unstaged or staged changes to a specific file")
-).action(async (filePath: string, opts: { model: string; host: string; provider: string; output?: string; maxTokens?: string; save: boolean }) => {
-  const diff = await getFileDiff(filePath).catch(die);
-  await runReview(diff, `file: ${filePath}`, makeOpts(opts), opts.output, !opts.save).catch(die);
-});
+  program.command("file <path>").description("Review unstaged or staged changes to a specific file")
+).action(
+  async (
+    filePath: string,
+    opts: {
+      model: string;
+      host: string;
+      provider: string;
+      output?: string;
+      maxTokens?: string;
+      save: boolean;
+    }
+  ) => {
+    const diff = await getFileDiff(filePath).catch(die);
+    await runReview(diff, `file: ${filePath}`, makeOpts(opts), opts.output, !opts.save).catch(die);
+  }
+);
 
 // ─── history subcommand group ──────────────────────────────────────────────
 
-const historyCmd = program
-  .command("history")
-  .description("Manage saved review history");
+const historyCmd = program.command("history").description("Manage saved review history");
 
 historyCmd
   .command("list")
@@ -134,11 +157,12 @@ historyCmd
     }
     for (const r of reviews) {
       const date = new Date(r.generatedAt).toLocaleString();
-      const badge = r.stats.high > 0
-        ? `🔴 ${r.stats.high}H`
-        : r.stats.medium > 0
-          ? `🟡 ${r.stats.medium}M`
-          : "✅";
+      const badge =
+        r.stats.high > 0
+          ? `🔴 ${r.stats.high}H`
+          : r.stats.medium > 0
+            ? `🟡 ${r.stats.medium}M`
+            : "✅";
       console.log(`${r.id}  ${badge}  ${r.diffSource}  (${r.model}, ${date})`);
     }
   });
