@@ -33,7 +33,7 @@ export class ReviewHistoryStore {
     }
   }
 
-  list(opts: { limit?: number } = {}): StoredReview[] {
+  list(opts: { limit?: number; diffSource?: string } = {}): StoredReview[] {
     let files: string[];
     try {
       files = readdirSync(this.dir).filter((f) => f.endsWith(".json"));
@@ -41,14 +41,22 @@ export class ReviewHistoryStore {
       return [];
     }
     files.sort().reverse();
-    if (opts.limit) files = files.slice(0, opts.limit);
-    return files.flatMap((f) => {
+
+    let reviews = files.flatMap((f) => {
       try {
         return [JSON.parse(readFileSync(join(this.dir, f), "utf8")) as StoredReview];
       } catch {
         return [];
       }
     });
+
+    if (opts.diffSource !== undefined) {
+      reviews = reviews.filter((r) => r.diffSource === opts.diffSource);
+    }
+    if (opts.limit && opts.limit > 0) {
+      reviews = reviews.slice(0, opts.limit);
+    }
+    return reviews;
   }
 
   delete(id: string): boolean {
@@ -77,5 +85,24 @@ export class ReviewHistoryStore {
       }
     }
     return count;
+  }
+
+  search(query: string, opts: { limit?: number } = {}): StoredReview[] {
+    const terms = query
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((t) => t.length > 0);
+
+    if (terms.length === 0) return [];
+
+    const all = this.list();
+    const matches = all.filter((r) => {
+      const haystack = [r.diffSource, r.summary, r.model, ...r.comments.map((c) => c.message)]
+        .join(" ")
+        .toLowerCase();
+      return terms.every((t) => haystack.includes(t));
+    });
+
+    return opts.limit !== undefined ? matches.slice(0, opts.limit) : matches;
   }
 }
