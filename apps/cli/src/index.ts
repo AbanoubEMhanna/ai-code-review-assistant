@@ -7,6 +7,7 @@ import { getStagedDiff, getBranchDiff, getFileDiff } from "./git.js";
 import {
   printReport,
   printJson,
+  printPingJson,
   printHistoryStats,
   printPingResult,
   saveMarkdown,
@@ -227,10 +228,13 @@ program
   .option("-m, --model <model>", "Model name", DEFAULT_MODEL)
   .option("-H, --host <url>", "AI host URL", DEFAULT_HOST)
   .option("-p, --provider <provider>", "Provider: ollama or lmstudio", DEFAULT_PROVIDER)
-  .action(async (opts: { model: string; host: string; provider: string }) => {
+  .option("--json", "Output ping result as JSON (suppresses formatted output)")
+  .action(async (opts: { model: string; host: string; provider: string; json?: boolean }) => {
     const provider = opts.provider.trim().toLowerCase();
     if (provider !== "ollama" && provider !== "lmstudio") {
-      console.error(`Invalid provider "${opts.provider}". Use "ollama" or "lmstudio".`);
+      if (!opts.json)
+        console.error(`Invalid provider "${opts.provider}". Use "ollama" or "lmstudio".`);
+      else process.stderr.write(`{"error":"Invalid provider \\"${opts.provider}\\""}\n`);
       process.exit(1);
     }
     const result = await pingProvider({
@@ -238,7 +242,11 @@ program
       host: opts.host,
       model: opts.model,
     });
-    printPingResult(result);
+    if (opts.json) {
+      printPingJson(result);
+    } else {
+      printPingResult(result);
+    }
     if (!result.ok || !result.modelFound) process.exit(1);
   });
 

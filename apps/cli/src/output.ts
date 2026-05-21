@@ -167,6 +167,10 @@ export function printJson(report: ReviewReport): void {
   process.stdout.write(JSON.stringify(report, null, 2) + "\n");
 }
 
+export function printPingJson(result: PingResult): void {
+  process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+}
+
 export interface HistoryStats {
   reviewCount: number;
   totalIssues: number;
