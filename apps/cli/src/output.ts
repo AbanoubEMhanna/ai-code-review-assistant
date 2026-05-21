@@ -121,6 +121,10 @@ export function saveMarkdown(report: ReviewReport, outputPath: string): void {
   writeFileSync(outputPath, md, "utf8");
 }
 
+export function printJson(report: ReviewReport): void {
+  process.stdout.write(JSON.stringify(report, null, 2) + "\n");
+}
+
 export interface HistoryStats {
   reviewCount: number;
   totalIssues: number;
