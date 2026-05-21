@@ -125,9 +125,13 @@ export function printPingResult(result: PingResult): void {
     console.log(
       `  ${chalk.red("✗")} Connection failed: ${chalk.red(result.error ?? "unknown error")}`
     );
-    console.log(`  ${chalk.dim(`(${result.latencyMs}ms)`)}`);
+    if (result.latencyMs > 0) console.log(`  ${chalk.dim(`(${result.latencyMs}ms)`)}`);
     if (result.provider === "ollama") {
       console.log(chalk.dim("\n  Hint: run `ollama serve` to start the local server."));
+    } else if (result.provider === "anthropic") {
+      console.log(
+        chalk.dim("\n  Hint: check your API key is valid (console.anthropic.com/settings/keys).")
+      );
     } else {
       console.log(chalk.dim("\n  Hint: make sure LM Studio server is running."));
     }
@@ -154,6 +158,10 @@ export function printPingResult(result: PingResult): void {
     }
     if (result.provider === "ollama") {
       console.log(chalk.dim(`\n  Hint: run \`ollama pull ${result.model}\` to download it.\n`));
+    } else if (result.provider === "anthropic") {
+      console.log(
+        chalk.dim(`\n  Hint: check available model IDs at console.anthropic.com/docs/models.\n`)
+      );
     }
   }
 }
