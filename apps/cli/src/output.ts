@@ -1,6 +1,7 @@
 import chalk from "chalk";
 import { writeFileSync } from "node:fs";
 import type { ReviewReport } from "@ai-review/shared";
+import type { PingResult } from "@ai-review/ai";
 
 const SEVERITY_COLORS = {
   high: chalk.red.bold,
@@ -114,6 +115,47 @@ export function buildMarkdown(report: ReviewReport): string {
   }
 
   return lines.join("\n");
+}
+
+export function printPingResult(result: PingResult): void {
+  const providerLabel = chalk.bold(`${result.provider} @ ${result.host}`);
+  console.log(`\nPinging ${providerLabel} (model: ${chalk.bold(result.model)})…\n`);
+
+  if (!result.ok) {
+    console.log(
+      `  ${chalk.red("✗")} Connection failed: ${chalk.red(result.error ?? "unknown error")}`
+    );
+    console.log(`  ${chalk.dim(`(${result.latencyMs}ms)`)}`);
+    if (result.provider === "ollama") {
+      console.log(chalk.dim("\n  Hint: run `ollama serve` to start the local server."));
+    } else {
+      console.log(chalk.dim("\n  Hint: make sure LM Studio server is running."));
+    }
+    return;
+  }
+
+  console.log(`  ${chalk.green("✓")} Host reachable ${chalk.dim(`(${result.latencyMs}ms)`)}`);
+
+  if (result.modelFound) {
+    console.log(`  ${chalk.green("✓")} Model ${chalk.bold(result.model)} is available`);
+    console.log(chalk.green.bold("\n  Ready to review!\n"));
+  } else {
+    console.log(`  ${chalk.yellow("⚠")} Model ${chalk.bold(result.model)} not found`);
+    if (result.availableModels.length > 0) {
+      console.log(`\n  Available models:`);
+      for (const m of result.availableModels.slice(0, 10)) {
+        console.log(`    ${chalk.cyan("•")} ${m}`);
+      }
+      if (result.availableModels.length > 10) {
+        console.log(chalk.dim(`    … and ${result.availableModels.length - 10} more`));
+      }
+    } else {
+      console.log(chalk.dim(`\n  No models found — try pulling one first.`));
+    }
+    if (result.provider === "ollama") {
+      console.log(chalk.dim(`\n  Hint: run \`ollama pull ${result.model}\` to download it.\n`));
+    }
+  }
 }
 
 export function saveMarkdown(report: ReviewReport, outputPath: string): void {

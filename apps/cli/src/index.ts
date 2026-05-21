@@ -1,9 +1,15 @@
 #!/usr/bin/env node
 import { program } from "commander";
-import { reviewDiff } from "@ai-review/ai";
+import { reviewDiff, pingProvider } from "@ai-review/ai";
 import type { ReviewOptions, ReviewReport, ReviewSeverity } from "@ai-review/shared";
 import { getStagedDiff, getBranchDiff, getFileDiff } from "./git.js";
-import { printReport, printJson, printHistoryStats, saveMarkdown } from "./output.js";
+import {
+  printReport,
+  printJson,
+  printHistoryStats,
+  printPingResult,
+  saveMarkdown,
+} from "./output.js";
 import type { HistoryStats } from "./output.js";
 import { ReviewHistoryStore } from "./history-store.js";
 
@@ -205,6 +211,29 @@ sharedOptions(
     !opts.save
   ).catch(die);
 });
+
+// ─── ping command ─────────────────────────────────────────────────────────
+
+program
+  .command("ping")
+  .description("Test connectivity to the configured AI provider")
+  .option("-m, --model <model>", "Model name", DEFAULT_MODEL)
+  .option("-H, --host <url>", "AI host URL", DEFAULT_HOST)
+  .option("-p, --provider <provider>", "Provider: ollama or lmstudio", DEFAULT_PROVIDER)
+  .action(async (opts: { model: string; host: string; provider: string }) => {
+    const provider = opts.provider.trim().toLowerCase();
+    if (provider !== "ollama" && provider !== "lmstudio") {
+      console.error(`Invalid provider "${opts.provider}". Use "ollama" or "lmstudio".`);
+      process.exit(1);
+    }
+    const result = await pingProvider({
+      provider: provider as ReviewOptions["provider"],
+      host: opts.host,
+      model: opts.model,
+    });
+    printPingResult(result);
+    if (!result.ok || !result.modelFound) process.exit(1);
+  });
 
 // ─── history subcommand group ──────────────────────────────────────────────
 
