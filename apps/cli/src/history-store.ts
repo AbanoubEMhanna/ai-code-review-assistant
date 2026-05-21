@@ -86,4 +86,23 @@ export class ReviewHistoryStore {
     }
     return count;
   }
+
+  search(query: string, opts: { limit?: number } = {}): StoredReview[] {
+    const terms = query
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((t) => t.length > 0);
+
+    if (terms.length === 0) return [];
+
+    const all = this.list();
+    const matches = all.filter((r) => {
+      const haystack = [r.diffSource, r.summary, r.model, ...r.comments.map((c) => c.message)]
+        .join(" ")
+        .toLowerCase();
+      return terms.every((t) => haystack.includes(t));
+    });
+
+    return opts.limit !== undefined ? matches.slice(0, opts.limit) : matches;
+  }
 }

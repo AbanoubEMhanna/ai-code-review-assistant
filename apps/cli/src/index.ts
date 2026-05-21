@@ -313,6 +313,30 @@ historyCmd
     console.log(`Cleared ${n} review(s) from history.`);
   });
 
+historyCmd
+  .command("search <query>")
+  .description("Search saved reviews by keyword (searches summary, source, model, and comments)")
+  .option("-n, --limit <number>", "Maximum results to show", "20")
+  .action((query: string, opts: { limit: string }) => {
+    const limit = parseInt(opts.limit, 10);
+    const results = store.search(query, { limit: isNaN(limit) ? 20 : limit });
+    if (results.length === 0) {
+      console.log(`No reviews matching "${query}".`);
+      return;
+    }
+    console.log(`Found ${results.length} review(s) matching "${query}":\n`);
+    for (const r of results) {
+      const date = new Date(r.generatedAt).toLocaleString();
+      const badge =
+        r.stats.high > 0
+          ? `🔴 ${r.stats.high}H`
+          : r.stats.medium > 0
+            ? `🟡 ${r.stats.medium}M`
+            : "✅";
+      console.log(`${r.id}  ${badge}  ${r.diffSource}  (${r.model}, ${date})`);
+    }
+  });
+
 function die(err: unknown): never {
   console.error("Error:", err instanceof Error ? err.message : String(err));
   process.exit(1);
