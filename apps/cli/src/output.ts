@@ -1,6 +1,7 @@
 import chalk from "chalk";
 import { writeFileSync } from "node:fs";
 import type { ReviewReport } from "@ai-review/shared";
+import type { PingResult } from "@ai-review/ai";
 
 const SEVERITY_COLORS = {
   high: chalk.red.bold,
@@ -18,7 +19,9 @@ const SEVERITY_ICONS = {
 
 export function printReport(report: ReviewReport): void {
   console.log("\n" + chalk.bold.underline("AI Code Review Report"));
-  console.log(chalk.dim(`Model: ${report.model}  |  Source: ${report.diffSource}  |  ${report.generatedAt}`));
+  console.log(
+    chalk.dim(`Model: ${report.model}  |  Source: ${report.diffSource}  |  ${report.generatedAt}`)
+  );
   console.log();
   console.log(chalk.bold("Summary"));
   console.log(report.summary);
@@ -32,7 +35,9 @@ export function printReport(report: ReviewReport): void {
     stats.info > 0 ? chalk.gray(`${stats.info} info`) : null,
   ].filter(Boolean);
 
-  console.log(chalk.bold("Issues: ") + (parts.length ? parts.join(chalk.dim("  ·  ")) : chalk.green("none")));
+  console.log(
+    chalk.bold("Issues: ") + (parts.length ? parts.join(chalk.dim("  ·  ")) : chalk.green("none"))
+  );
 
   if (report.comments.length === 0) {
     console.log(chalk.green("\nNo issues found. "));
@@ -67,7 +72,9 @@ export function buildMarkdown(report: ReviewReport): string {
   const lines: string[] = [];
 
   lines.push(`# AI Code Review Report`);
-  lines.push(`\n**Model:** ${report.model}  \n**Source:** ${report.diffSource}  \n**Generated:** ${report.generatedAt}`);
+  lines.push(
+    `\n**Model:** ${report.model}  \n**Source:** ${report.diffSource}  \n**Generated:** ${report.generatedAt}`
+  );
   lines.push(`\n## Summary\n\n${report.summary}`);
   lines.push(`\n## Stats\n`);
   lines.push(`| Severity | Count |`);
@@ -97,7 +104,9 @@ export function buildMarkdown(report: ReviewReport): string {
     for (const c of comments) {
       const icon = { high: "🔴", medium: "🟡", low: "🔵", info: "⚪" }[c.severity];
       const loc = c.line != null ? ` (line ${c.line})` : "";
-      lines.push(`- ${icon} **${c.severity.toUpperCase()}**${loc} \`${c.category}\` — ${c.message}`);
+      lines.push(
+        `- ${icon} **${c.severity.toUpperCase()}**${loc} \`${c.category}\` — ${c.message}`
+      );
       if (c.suggestion) {
         lines.push(`  > **Suggestion:** ${c.suggestion}`);
       }
@@ -108,7 +117,94 @@ export function buildMarkdown(report: ReviewReport): string {
   return lines.join("\n");
 }
 
+export function printPingResult(result: PingResult): void {
+  const providerLabel = chalk.bold(`${result.provider} @ ${result.host}`);
+  console.log(`\nPinging ${providerLabel} (model: ${chalk.bold(result.model)})…\n`);
+
+  if (!result.ok) {
+    console.log(
+      `  ${chalk.red("✗")} Connection failed: ${chalk.red(result.error ?? "unknown error")}`
+    );
+    console.log(`  ${chalk.dim(`(${result.latencyMs}ms)`)}`);
+    if (result.provider === "ollama") {
+      console.log(chalk.dim("\n  Hint: run `ollama serve` to start the local server."));
+    } else {
+      console.log(chalk.dim("\n  Hint: make sure LM Studio server is running."));
+    }
+    return;
+  }
+
+  console.log(`  ${chalk.green("✓")} Host reachable ${chalk.dim(`(${result.latencyMs}ms)`)}`);
+
+  if (result.modelFound) {
+    console.log(`  ${chalk.green("✓")} Model ${chalk.bold(result.model)} is available`);
+    console.log(chalk.green.bold("\n  Ready to review!\n"));
+  } else {
+    console.log(`  ${chalk.yellow("⚠")} Model ${chalk.bold(result.model)} not found`);
+    if (result.availableModels.length > 0) {
+      console.log(`\n  Available models:`);
+      for (const m of result.availableModels.slice(0, 10)) {
+        console.log(`    ${chalk.cyan("•")} ${m}`);
+      }
+      if (result.availableModels.length > 10) {
+        console.log(chalk.dim(`    … and ${result.availableModels.length - 10} more`));
+      }
+    } else {
+      console.log(chalk.dim(`\n  No models found — try pulling one first.`));
+    }
+    if (result.provider === "ollama") {
+      console.log(chalk.dim(`\n  Hint: run \`ollama pull ${result.model}\` to download it.\n`));
+    }
+  }
+}
+
 export function saveMarkdown(report: ReviewReport, outputPath: string): void {
   const md = buildMarkdown(report);
   writeFileSync(outputPath, md, "utf8");
+}
+
+export function printJson(report: ReviewReport): void {
+  process.stdout.write(JSON.stringify(report, null, 2) + "\n");
+}
+
+export interface HistoryStats {
+  reviewCount: number;
+  totalIssues: number;
+  bySeverity: { high: number; medium: number; low: number; info: number };
+  byCategory: Record<string, number>;
+  topSources: Array<{ source: string; count: number }>;
+  avgIssuesPerReview: number;
+}
+
+export function printHistoryStats(stats: HistoryStats): void {
+  console.log("\n" + chalk.bold.underline("Review History Stats"));
+  console.log(
+    `  ${chalk.bold(String(stats.reviewCount))} review(s)  ·  ` +
+      `${chalk.bold(String(stats.totalIssues))} total issue(s)  ·  ` +
+      `avg ${chalk.bold(stats.avgIssuesPerReview.toFixed(1))} issues/review`
+  );
+
+  console.log("\n" + chalk.bold("By severity"));
+  const sev = stats.bySeverity;
+  if (sev.high > 0) console.log(`  🔴 ${chalk.red.bold("High")}   ${sev.high}`);
+  if (sev.medium > 0) console.log(`  🟡 ${chalk.yellow.bold("Medium")} ${sev.medium}`);
+  if (sev.low > 0) console.log(`  🔵 ${chalk.cyan("Low")}    ${sev.low}`);
+  if (sev.info > 0) console.log(`  ⚪ ${chalk.gray("Info")}   ${sev.info}`);
+  if (stats.totalIssues === 0) console.log(chalk.green("  No issues found across all reviews."));
+
+  if (Object.keys(stats.byCategory).length > 0) {
+    console.log("\n" + chalk.bold("By category"));
+    const sorted = Object.entries(stats.byCategory).sort((a, b) => b[1] - a[1]);
+    for (const [cat, n] of sorted) {
+      console.log(`  ${chalk.dim("·")} ${cat.padEnd(18)} ${n}`);
+    }
+  }
+
+  if (stats.topSources.length > 0) {
+    console.log("\n" + chalk.bold("Top sources"));
+    for (const { source, count } of stats.topSources) {
+      console.log(`  ${chalk.dim("·")} ${source.padEnd(30)} ${count} review(s)`);
+    }
+  }
+  console.log();
 }
