@@ -3,7 +3,8 @@ import { program } from "commander";
 import { reviewDiff } from "@ai-review/ai";
 import type { ReviewOptions, ReviewReport, ReviewSeverity } from "@ai-review/shared";
 import { getStagedDiff, getBranchDiff, getFileDiff } from "./git.js";
-import { printReport, printJson, saveMarkdown } from "./output.js";
+import { printReport, printJson, printHistoryStats, saveMarkdown } from "./output.js";
+import type { HistoryStats } from "./output.js";
 import { ReviewHistoryStore } from "./history-store.js";
 
 const DEFAULT_HOST = process.env["AI_HOST"] ?? "http://localhost:11434";
@@ -194,9 +195,17 @@ historyCmd
   .command("list")
   .description("List saved reviews (newest first)")
   .option("-n, --limit <number>", "Number of reviews to show", "20")
-  .action((opts: { limit: string }) => {
+  .option("-s, --source <pattern>", "Filter by diff source (exact match)")
+  .action((opts: { limit: string; source?: string }) => {
     const limit = parseInt(opts.limit, 10);
-    const reviews = store.list({ limit: isNaN(limit) ? 20 : limit });
+    if (isNaN(limit) || limit < 1) {
+      console.error(`Invalid --limit "${opts.limit}". Use a positive integer.`);
+      process.exit(1);
+    }
+    const reviews = store.list({
+      limit,
+      ...(opts.source !== undefined ? { diffSource: opts.source } : {}),
+    });
     if (reviews.length === 0) {
       console.log("No saved reviews.");
       return;
@@ -237,6 +246,50 @@ historyCmd
     }
     saveMarkdown(review, opts.output);
     console.log(`Exported to ${opts.output}`);
+  });
+
+historyCmd
+  .command("stats")
+  .description("Show aggregate statistics across saved reviews")
+  .option("-s, --source <pattern>", "Restrict stats to a specific diff source (exact match)")
+  .action((opts: { source?: string }) => {
+    const reviews = store.list(opts.source !== undefined ? { diffSource: opts.source } : {});
+    if (reviews.length === 0) {
+      console.log("No saved reviews.");
+      return;
+    }
+
+    const bySeverity = { high: 0, medium: 0, low: 0, info: 0 };
+    const byCategory: Record<string, number> = {};
+    const sourceCounts: Record<string, number> = {};
+
+    for (const r of reviews) {
+      bySeverity.high += r.stats.high;
+      bySeverity.medium += r.stats.medium;
+      bySeverity.low += r.stats.low;
+      bySeverity.info += r.stats.info;
+      sourceCounts[r.diffSource] = (sourceCounts[r.diffSource] ?? 0) + 1;
+      for (const c of r.comments) {
+        byCategory[c.category] = (byCategory[c.category] ?? 0) + 1;
+      }
+    }
+
+    const totalIssues = bySeverity.high + bySeverity.medium + bySeverity.low + bySeverity.info;
+    const topSources = Object.entries(sourceCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([source, count]) => ({ source, count }));
+
+    const histStats: HistoryStats = {
+      reviewCount: reviews.length,
+      totalIssues,
+      bySeverity,
+      byCategory,
+      topSources,
+      avgIssuesPerReview: reviews.length > 0 ? totalIssues / reviews.length : 0,
+    };
+
+    printHistoryStats(histStats);
   });
 
 historyCmd
