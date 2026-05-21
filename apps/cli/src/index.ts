@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { writeFileSync } from "node:fs";
 import { program } from "commander";
 import { reviewDiff, pingProvider } from "@ai-review/ai";
 import type { ReviewOptions, ReviewReport, ReviewSeverity } from "@ai-review/shared";
@@ -12,11 +13,17 @@ import {
 } from "./output.js";
 import type { HistoryStats } from "./output.js";
 import { ReviewHistoryStore } from "./history-store.js";
+import { loadConfig, getConfigFilePath, type AiReviewConfig } from "./config.js";
 
-const DEFAULT_HOST = process.env["AI_HOST"] ?? "http://localhost:11434";
-const DEFAULT_PROVIDER = (process.env["AI_PROVIDER"] ?? "ollama") as ReviewOptions["provider"];
+const fileConfig: AiReviewConfig = loadConfig();
+
+const DEFAULT_HOST = process.env["AI_HOST"] ?? fileConfig.host ?? "http://localhost:11434";
+const DEFAULT_PROVIDER = (process.env["AI_PROVIDER"] ??
+  fileConfig.provider ??
+  "ollama") as ReviewOptions["provider"];
 const DEFAULT_MODEL =
   process.env["AI_MODEL"] ??
+  fileConfig.model ??
   (DEFAULT_PROVIDER === "anthropic" ? "claude-sonnet-4-6" : "qwen3:latest");
 const DEFAULT_API_KEY = process.env["ANTHROPIC_API_KEY"];
 
@@ -383,6 +390,53 @@ historyCmd
             : "✅";
       console.log(`${r.id}  ${badge}  ${r.diffSource}  (${r.model}, ${date})`);
     }
+  });
+
+// ─── config subcommand group ───────────────────────────────────────────────
+
+const configCmd = program.command("config").description("Manage ai-review configuration");
+
+configCmd
+  .command("show")
+  .description("Show the active configuration and its source")
+  .action(() => {
+    const configPath = getConfigFilePath();
+    const effective = {
+      model: DEFAULT_MODEL,
+      host: DEFAULT_HOST,
+      provider: DEFAULT_PROVIDER,
+      ...(fileConfig.maxTokens !== undefined ? { maxTokens: fileConfig.maxTokens } : {}),
+    };
+
+    console.log("\nEffective configuration:");
+    console.log(JSON.stringify(effective, null, 2));
+
+    if (configPath) {
+      console.log(`\nConfig file: ${configPath}`);
+    } else {
+      console.log("\nNo config file found — using defaults and environment variables.");
+      console.log(`  Create .ai-reviewrc.json in the project root to set persistent defaults.`);
+    }
+  });
+
+configCmd
+  .command("init")
+  .description("Create a .ai-reviewrc.json with the current defaults")
+  .action(() => {
+    const configPath = getConfigFilePath();
+    if (configPath) {
+      console.error(`Config file already exists: ${configPath}`);
+      console.error("Delete it first or edit it directly.");
+      process.exit(1);
+    }
+    const defaults: AiReviewConfig = {
+      model: DEFAULT_MODEL,
+      host: DEFAULT_HOST,
+      provider: DEFAULT_PROVIDER,
+    };
+    writeFileSync(".ai-reviewrc.json", JSON.stringify(defaults, null, 2) + "\n", "utf8");
+    console.log("Created .ai-reviewrc.json with current defaults.");
+    console.log("Edit it to set your preferred model, host, and provider.");
   });
 
 function die(err: unknown): never {
