@@ -8,8 +8,11 @@ import type { HistoryStats } from "./output.js";
 import { ReviewHistoryStore } from "./history-store.js";
 
 const DEFAULT_HOST = process.env["AI_HOST"] ?? "http://localhost:11434";
-const DEFAULT_MODEL = process.env["AI_MODEL"] ?? "qwen3:latest";
 const DEFAULT_PROVIDER = (process.env["AI_PROVIDER"] ?? "ollama") as ReviewOptions["provider"];
+const DEFAULT_MODEL =
+  process.env["AI_MODEL"] ??
+  (DEFAULT_PROVIDER === "anthropic" ? "claude-sonnet-4-6" : "qwen3:latest");
+const DEFAULT_API_KEY = process.env["ANTHROPIC_API_KEY"];
 
 const SEVERITY_RANK: Record<ReviewSeverity, number> = {
   high: 3,
@@ -24,12 +27,22 @@ function makeOpts(cmd: {
   provider: string;
   output?: string;
   maxTokens?: string;
+  apiKey?: string;
 }): ReviewOptions {
   const provider = cmd.provider.trim().toLowerCase();
-  if (provider !== "ollama" && provider !== "lmstudio") {
-    throw new Error(`Invalid provider "${cmd.provider}". Use "ollama" or "lmstudio".`);
+  if (provider !== "ollama" && provider !== "lmstudio" && provider !== "anthropic") {
+    throw new Error(
+      `Invalid provider "${cmd.provider}". Use "ollama", "lmstudio", or "anthropic".`
+    );
+  }
+  const apiKey = cmd.apiKey ?? DEFAULT_API_KEY;
+  if (provider === "anthropic" && !apiKey) {
+    throw new Error(
+      "Anthropic provider requires an API key. Set ANTHROPIC_API_KEY or pass --api-key <key>."
+    );
   }
   const opts: ReviewOptions = { model: cmd.model, host: cmd.host, provider };
+  if (apiKey) opts.apiKey = apiKey;
   if (cmd.maxTokens !== undefined) {
     const n = parseInt(cmd.maxTokens, 10);
     if (isNaN(n) || n < 1) {
@@ -117,8 +130,13 @@ program
 const sharedOptions = (cmd: ReturnType<typeof program.command>) =>
   cmd
     .option("-m, --model <model>", "Model name", DEFAULT_MODEL)
-    .option("-H, --host <url>", "AI host URL", DEFAULT_HOST)
-    .option("-p, --provider <provider>", "Provider: ollama or lmstudio", DEFAULT_PROVIDER)
+    .option("-H, --host <url>", "AI host URL (Ollama/LM Studio only)", DEFAULT_HOST)
+    .option(
+      "-p, --provider <provider>",
+      "Provider: ollama | lmstudio | anthropic",
+      DEFAULT_PROVIDER
+    )
+    .option("-k, --api-key <key>", "API key (Anthropic; or set ANTHROPIC_API_KEY env var)")
     .option("-t, --max-tokens <number>", "Maximum tokens for the AI response (default: 4096)")
     .option("-o, --output <file>", "Save Markdown report to file")
     .option("--json", "Output review as JSON (suppresses formatted output)")
@@ -134,6 +152,7 @@ type SharedOpts = {
   provider: string;
   output?: string;
   maxTokens?: string;
+  apiKey?: string;
   json?: boolean;
   failOn?: string;
   save: boolean;
