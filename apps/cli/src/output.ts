@@ -154,7 +154,13 @@ export function printPingResult(result: PingResult): void {
         console.log(chalk.dim(`    … and ${result.availableModels.length - 10} more`));
       }
     } else {
-      console.log(chalk.dim(`\n  No models found — try pulling one first.`));
+      console.log(
+        chalk.dim(
+          result.provider === "ollama"
+            ? `\n  No models found — try pulling one first.`
+            : `\n  No models found.`
+        )
+      );
     }
     if (result.provider === "ollama") {
       console.log(chalk.dim(`\n  Hint: run \`ollama pull ${result.model}\` to download it.\n`));
