@@ -226,29 +226,45 @@ program
   .command("ping")
   .description("Test connectivity to the configured AI provider")
   .option("-m, --model <model>", "Model name", DEFAULT_MODEL)
-  .option("-H, --host <url>", "AI host URL", DEFAULT_HOST)
-  .option("-p, --provider <provider>", "Provider: ollama or lmstudio", DEFAULT_PROVIDER)
+  .option("-H, --host <url>", "AI host URL (Ollama/LM Studio only)", DEFAULT_HOST)
+  .option("-p, --provider <provider>", "Provider: ollama | lmstudio | anthropic", DEFAULT_PROVIDER)
+  .option("-k, --api-key <key>", "API key (Anthropic; or set ANTHROPIC_API_KEY env var)")
   .option("--json", "Output ping result as JSON (suppresses formatted output)")
-  .action(async (opts: { model: string; host: string; provider: string; json?: boolean }) => {
-    const provider = opts.provider.trim().toLowerCase();
-    if (provider !== "ollama" && provider !== "lmstudio") {
-      if (!opts.json)
-        console.error(`Invalid provider "${opts.provider}". Use "ollama" or "lmstudio".`);
-      else process.stderr.write(`{"error":"Invalid provider \\"${opts.provider}\\""}\n`);
-      process.exit(1);
+  .action(
+    async (opts: {
+      model: string;
+      host: string;
+      provider: string;
+      apiKey?: string;
+      json?: boolean;
+    }) => {
+      const provider = opts.provider.trim().toLowerCase();
+      if (provider !== "ollama" && provider !== "lmstudio" && provider !== "anthropic") {
+        if (!opts.json) {
+          console.error(
+            `Invalid provider "${opts.provider}". Use "ollama", "lmstudio", or "anthropic".`
+          );
+        } else {
+          process.stderr.write(`{"error":"Invalid provider \\"${opts.provider}\\""}\n`);
+        }
+        process.exit(1);
+      }
+      const apiKey = opts.apiKey ?? DEFAULT_API_KEY;
+      const pingOpts: Parameters<typeof pingProvider>[0] = {
+        provider: provider as ReviewOptions["provider"],
+        host: opts.host,
+        model: opts.model,
+      };
+      if (apiKey) pingOpts.apiKey = apiKey;
+      const result = await pingProvider(pingOpts);
+      if (opts.json) {
+        printPingJson(result);
+      } else {
+        printPingResult(result);
+      }
+      if (!result.ok || !result.modelFound) process.exit(1);
     }
-    const result = await pingProvider({
-      provider: provider as ReviewOptions["provider"],
-      host: opts.host,
-      model: opts.model,
-    });
-    if (opts.json) {
-      printPingJson(result);
-    } else {
-      printPingResult(result);
-    }
-    if (!result.ok || !result.modelFound) process.exit(1);
-  });
+  );
 
 // ─── history subcommand group ──────────────────────────────────────────────
 

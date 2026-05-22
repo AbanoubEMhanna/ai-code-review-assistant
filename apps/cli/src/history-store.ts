@@ -9,6 +9,10 @@ export interface StoredReview extends ReviewReport {
 
 const DEFAULT_DIR = join(homedir(), ".ai-review", "history");
 
+function isValidId(id: string): boolean {
+  return /^\d+-[a-z0-9]+$/.test(id);
+}
+
 export class ReviewHistoryStore {
   private readonly dir: string;
 
@@ -25,6 +29,7 @@ export class ReviewHistoryStore {
   }
 
   get(id: string): StoredReview | null {
+    if (!isValidId(id)) return null;
     try {
       const raw = readFileSync(join(this.dir, `${id}.json`), "utf8");
       return JSON.parse(raw) as StoredReview;
@@ -60,6 +65,7 @@ export class ReviewHistoryStore {
   }
 
   delete(id: string): boolean {
+    if (!isValidId(id)) return false;
     try {
       rmSync(join(this.dir, `${id}.json`));
       return true;
