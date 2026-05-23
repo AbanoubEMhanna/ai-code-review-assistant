@@ -245,7 +245,9 @@ program
             `Invalid provider "${opts.provider}". Use "ollama", "lmstudio", or "anthropic".`
           );
         } else {
-          process.stderr.write(`{"error":"Invalid provider \\"${opts.provider}\\""}\n`);
+          process.stderr.write(
+            JSON.stringify({ error: `Invalid provider "${opts.provider}"` }) + "\n"
+          );
         }
         process.exit(1);
       }
