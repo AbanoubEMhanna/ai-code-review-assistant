@@ -225,19 +225,25 @@ program
   .command("ping")
   .description("Test connectivity to the configured AI provider")
   .option("-m, --model <model>", "Model name", DEFAULT_MODEL)
-  .option("-H, --host <url>", "AI host URL", DEFAULT_HOST)
-  .option("-p, --provider <provider>", "Provider: ollama or lmstudio", DEFAULT_PROVIDER)
-  .action(async (opts: { model: string; host: string; provider: string }) => {
+  .option("-H, --host <url>", "AI host URL (Ollama/LM Studio only)", DEFAULT_HOST)
+  .option("-p, --provider <provider>", "Provider: ollama | lmstudio | anthropic", DEFAULT_PROVIDER)
+  .option("-k, --api-key <key>", "API key (Anthropic; or set ANTHROPIC_API_KEY env var)")
+  .action(async (opts: { model: string; host: string; provider: string; apiKey?: string }) => {
     const provider = opts.provider.trim().toLowerCase();
-    if (provider !== "ollama" && provider !== "lmstudio") {
-      console.error(`Invalid provider "${opts.provider}". Use "ollama" or "lmstudio".`);
+    if (provider !== "ollama" && provider !== "lmstudio" && provider !== "anthropic") {
+      console.error(
+        `Invalid provider "${opts.provider}". Use "ollama", "lmstudio", or "anthropic".`
+      );
       process.exit(1);
     }
-    const result = await pingProvider({
+    const apiKey = opts.apiKey ?? DEFAULT_API_KEY;
+    const pingOpts: Parameters<typeof pingProvider>[0] = {
       provider: provider as ReviewOptions["provider"],
       host: opts.host,
       model: opts.model,
-    });
+    };
+    if (apiKey) pingOpts.apiKey = apiKey;
+    const result = await pingProvider(pingOpts);
     printPingResult(result);
     if (!result.ok || !result.modelFound) process.exit(1);
   });
