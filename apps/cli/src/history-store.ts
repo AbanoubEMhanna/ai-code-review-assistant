@@ -93,6 +93,19 @@ export class ReviewHistoryStore {
     return count;
   }
 
+  pruneOlderThan(days: number): number {
+    const cutoffMs = Date.now() - days * 24 * 60 * 60 * 1000;
+    const all = this.list();
+    let deleted = 0;
+    for (const review of all) {
+      const reviewMs = Date.parse(review.generatedAt);
+      if (!isNaN(reviewMs) && reviewMs < cutoffMs) {
+        if (this.delete(review.id)) deleted++;
+      }
+    }
+    return deleted;
+  }
+
   search(query: string, opts: { limit?: number } = {}): StoredReview[] {
     const terms = query
       .toLowerCase()
