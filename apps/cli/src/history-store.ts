@@ -94,6 +94,9 @@ export class ReviewHistoryStore {
   }
 
   pruneOlderThan(days: number): number {
+    if (!Number.isInteger(days) || days < 1) {
+      throw new Error(`"days" must be a positive integer, got "${days}"`);
+    }
     const cutoffMs = Date.now() - days * 24 * 60 * 60 * 1000;
     const all = this.list();
     let deleted = 0;
