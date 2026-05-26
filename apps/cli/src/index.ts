@@ -3,7 +3,7 @@ import { writeFileSync } from "node:fs";
 import { program } from "commander";
 import { reviewDiff, pingProvider } from "@ai-review/ai";
 import type { ReviewOptions, ReviewReport, ReviewSeverity } from "@ai-review/shared";
-import { getStagedDiff, getBranchDiff, getFileDiff } from "./git.js";
+import { getStagedDiff, getBranchDiff, getFileDiff, getRefDiff } from "./git.js";
 import {
   printReport,
   printJson,
@@ -211,6 +211,24 @@ sharedOptions(
   await runReview(
     diff,
     `file: ${filePath}`,
+    makeOpts(opts),
+    opts.output,
+    !!opts.json,
+    failOn,
+    !opts.save
+  ).catch(die);
+});
+
+sharedOptions(
+  program
+    .command("diff <ref1> <ref2>")
+    .description("Review the diff between two git refs (commits, branches, or tags)")
+).action(async (ref1: string, ref2: string, opts: SharedOpts) => {
+  const diff = await getRefDiff(ref1, ref2).catch(die);
+  const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
+  await runReview(
+    diff,
+    `diff ${ref1}..${ref2}`,
     makeOpts(opts),
     opts.output,
     !!opts.json,

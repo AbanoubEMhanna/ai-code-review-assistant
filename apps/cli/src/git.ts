@@ -24,6 +24,28 @@ export async function getBranchDiff(base: string): Promise<string> {
   return diff;
 }
 
+export async function getRefDiff(ref1: string, ref2: string): Promise<string> {
+  const t1 = ref1.trim();
+  const t2 = ref2.trim();
+  if (!t1) throw new Error("First ref cannot be empty.");
+  if (!t2) throw new Error("Second ref cannot be empty.");
+  for (const [label, ref] of [
+    ["ref1", t1],
+    ["ref2", t2],
+  ] as const) {
+    try {
+      await git.revparse([ref]);
+    } catch {
+      throw new Error(`${label} "${ref}" not found in this repository.`);
+    }
+  }
+  const diff = await git.diff([`${t1}..${t2}`]);
+  if (!diff.trim()) {
+    throw new Error(`No differences found between "${t1}" and "${t2}".`);
+  }
+  return diff;
+}
+
 export async function getFileDiff(filePath: string): Promise<string> {
   const diff = await git.diff(["HEAD", "--", filePath]);
   if (!diff.trim()) {
