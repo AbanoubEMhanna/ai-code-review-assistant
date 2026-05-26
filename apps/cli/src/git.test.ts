@@ -20,17 +20,36 @@ beforeEach(() => {
 });
 
 describe("getCommitDiff()", () => {
-  it("throws on a clearly non-hex hash", async () => {
-    await expect(getCommitDiff("not-a-hash!")).rejects.toThrow("does not look like");
+  it("throws on an empty string", async () => {
+    await expect(getCommitDiff("")).rejects.toThrow("cannot be empty");
   });
 
-  it("throws on a hash that is too short (< 4 chars)", async () => {
-    await expect(getCommitDiff("abc")).rejects.toThrow("does not look like");
+  it("throws on a whitespace-only string", async () => {
+    await expect(getCommitDiff("   ")).rejects.toThrow("cannot be empty");
   });
 
-  it("throws when revparse cannot resolve the hash", async () => {
+  it("throws when revparse cannot resolve the ref", async () => {
     mockRevparse.mockRejectedValue(new Error("unknown revision"));
     await expect(getCommitDiff("deadbeef")).rejects.toThrow("not found in this repository");
+  });
+
+  it("accepts symbolic refs like HEAD", async () => {
+    const resolvedSha = "abc123deadbeef0000000000000000000000000000";
+    const fakeDiff = "diff --git a/foo.ts b/foo.ts\n+added line\n";
+    mockRevparse.mockResolvedValue(resolvedSha);
+    mockRaw.mockResolvedValue(fakeDiff);
+
+    const result = await getCommitDiff("HEAD");
+    expect(result).toBe(fakeDiff);
+    expect(mockRevparse).toHaveBeenCalledWith(["HEAD"]);
+    expect(mockRaw).toHaveBeenCalledWith([
+      "diff-tree",
+      "--root",
+      "--no-commit-id",
+      "-p",
+      "-r",
+      resolvedSha,
+    ]);
   });
 
   it("throws when the commit has no file changes", async () => {
@@ -48,9 +67,10 @@ describe("getCommitDiff()", () => {
     expect(result).toBe(fakeDiff);
   });
 
-  it("passes the correct arguments to git raw", async () => {
+  it("passes the resolved SHA (not the original ref) to git raw", async () => {
     const fakeDiff = "diff --git a/bar.ts b/bar.ts\n-removed\n";
-    mockRevparse.mockResolvedValue("abc123ef");
+    const resolvedSha = "abc123ef00000000000000000000000000000000";
+    mockRevparse.mockResolvedValue(resolvedSha);
     mockRaw.mockResolvedValue(fakeDiff);
 
     await getCommitDiff("abc123ef");
@@ -60,11 +80,11 @@ describe("getCommitDiff()", () => {
       "--no-commit-id",
       "-p",
       "-r",
-      "abc123ef",
+      resolvedSha,
     ]);
   });
 
-  it("trims whitespace from the hash before using it", async () => {
+  it("trims whitespace from the ref before passing to revparse", async () => {
     const fakeDiff = "diff --git a/x.ts b/x.ts\n";
     mockRevparse.mockResolvedValue("abc123ef");
     mockRaw.mockResolvedValue(fakeDiff);

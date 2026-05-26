@@ -4,16 +4,17 @@ const git = simpleGit();
 
 export async function getCommitDiff(hash: string): Promise<string> {
   const trimmed = hash.trim();
-  if (!/^[0-9a-f]{4,40}$/i.test(trimmed)) {
-    throw new Error(`"${hash}" does not look like a valid git commit hash.`);
+  if (!trimmed) {
+    throw new Error("Commit reference cannot be empty.");
   }
+  let resolved: string;
   try {
-    await git.revparse([trimmed]);
+    resolved = (await git.revparse([trimmed])).trim();
   } catch {
     throw new Error(`Commit "${trimmed}" not found in this repository.`);
   }
   // --root handles the initial commit (no parent) transparently
-  const diff = await git.raw(["diff-tree", "--root", "--no-commit-id", "-p", "-r", trimmed]);
+  const diff = await git.raw(["diff-tree", "--root", "--no-commit-id", "-p", "-r", resolved]);
   if (!diff.trim()) {
     throw new Error(`No file changes found in commit "${trimmed}". It may be an empty commit.`);
   }
