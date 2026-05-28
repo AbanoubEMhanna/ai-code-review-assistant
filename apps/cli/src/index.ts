@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { program } from "commander";
 import { reviewDiff, pingProvider } from "@ai-review/ai";
 import type { ReviewOptions, ReviewReport, ReviewSeverity } from "@ai-review/shared";
@@ -327,6 +328,38 @@ historyCmd
     }
     saveMarkdown(review, opts.output);
     console.log(`Exported to ${opts.output}`);
+  });
+
+historyCmd
+  .command("export-all <dir>")
+  .description("Export all saved reviews as Markdown files to <dir>")
+  .option("--json", "Output result summary as JSON")
+  .action((dir: string, opts: { json?: boolean }) => {
+    const reviews = store.list();
+    if (reviews.length === 0) {
+      if (opts.json) {
+        process.stdout.write(JSON.stringify({ exported: 0, dir }) + "\n");
+      } else {
+        console.log("No saved reviews to export.");
+      }
+      return;
+    }
+    mkdirSync(dir, { recursive: true });
+    const files: string[] = [];
+    for (const r of reviews) {
+      const safeName = r.diffSource.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 60);
+      const filename = `${r.id}_${safeName}.md`;
+      saveMarkdown(r, join(dir, filename));
+      files.push(filename);
+    }
+    if (opts.json) {
+      process.stdout.write(JSON.stringify({ exported: files.length, dir, files }) + "\n");
+    } else {
+      console.log(`Exported ${files.length} review(s) to ${dir}/`);
+      for (const f of files) {
+        console.log(`  ${f}`);
+      }
+    }
   });
 
 historyCmd
