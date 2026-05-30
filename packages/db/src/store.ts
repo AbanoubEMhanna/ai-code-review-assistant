@@ -71,6 +71,16 @@ export class ReviewStore {
       reviews = reviews.filter((r) => r.diffSource === opts.diffSource);
     }
 
+    if (opts.since !== undefined) {
+      const sinceMs = opts.since.getTime();
+      reviews = reviews.filter((r) => Date.parse(r.generatedAt) >= sinceMs);
+    }
+
+    if (opts.until !== undefined) {
+      const untilMs = opts.until.getTime();
+      reviews = reviews.filter((r) => Date.parse(r.generatedAt) <= untilMs);
+    }
+
     if (opts.limit !== undefined && opts.limit > 0) {
       reviews = reviews.slice(0, opts.limit);
     }
