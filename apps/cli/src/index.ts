@@ -69,7 +69,7 @@ function makeOpts(cmd: {
   return opts;
 }
 
-function parseDateArg(value: string): Date {
+function parseDateArg(value: string, endOfDay = false): Date {
   const v = value.trim();
   const relMatch = /^(\d+)([dwm])$/i.exec(v);
   if (relMatch && relMatch[1] !== undefined && relMatch[2] !== undefined) {
@@ -83,7 +83,7 @@ function parseDateArg(value: string): Date {
           : n * 30 * 24 * 60 * 60 * 1000;
     return new Date(Date.now() - msAgo);
   }
-  const d = new Date(v);
+  const d = new Date(endOfDay && /^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T23:59:59.999Z` : v);
   if (isNaN(d.getTime())) {
     throw new Error(
       `Invalid date "${value}". Use an ISO date (2024-01-15) or a relative value (7d, 2w, 1m).`
@@ -315,7 +315,7 @@ historyCmd
     let until: Date | undefined;
     try {
       if (opts.since !== undefined) since = parseDateArg(opts.since);
-      if (opts.until !== undefined) until = parseDateArg(opts.until);
+      if (opts.until !== undefined) until = parseDateArg(opts.until, true);
     } catch (err) {
       console.error("Error:", err instanceof Error ? err.message : String(err));
       process.exit(1);
@@ -389,7 +389,7 @@ historyCmd
     let until: Date | undefined;
     try {
       if (opts.since !== undefined) since = parseDateArg(opts.since);
-      if (opts.until !== undefined) until = parseDateArg(opts.until);
+      if (opts.until !== undefined) until = parseDateArg(opts.until, true);
     } catch (err) {
       console.error("Error:", err instanceof Error ? err.message : String(err));
       process.exit(1);
@@ -481,17 +481,21 @@ historyCmd
   .option("--until <date>", "Only search reviews at or before this date (ISO or 7d/2w/1m)")
   .action((query: string, opts: { limit: string; since?: string; until?: string }) => {
     const limit = parseInt(opts.limit, 10);
+    if (isNaN(limit) || limit < 1) {
+      console.error(`Invalid --limit "${opts.limit}". Use a positive integer.`);
+      process.exit(1);
+    }
     let since: Date | undefined;
     let until: Date | undefined;
     try {
       if (opts.since !== undefined) since = parseDateArg(opts.since);
-      if (opts.until !== undefined) until = parseDateArg(opts.until);
+      if (opts.until !== undefined) until = parseDateArg(opts.until, true);
     } catch (err) {
       console.error("Error:", err instanceof Error ? err.message : String(err));
       process.exit(1);
     }
     const results = store.search(query, {
-      limit: isNaN(limit) ? 20 : limit,
+      limit,
       ...(since !== undefined ? { since } : {}),
       ...(until !== undefined ? { until } : {}),
     });
