@@ -14,6 +14,7 @@ import {
 } from "./output.js";
 import type { HistoryStats } from "./output.js";
 import { ReviewHistoryStore } from "./history-store.js";
+import { compareReviews } from "./compare.js";
 import { loadConfig, getConfigFilePath, type AiReviewConfig } from "./config.js";
 
 const fileConfig: AiReviewConfig = loadConfig();
@@ -415,6 +416,91 @@ historyCmd
             ? `🟡 ${r.stats.medium}M`
             : "✅";
       console.log(`${r.id}  ${badge}  ${r.diffSource}  (${r.model}, ${date})`);
+    }
+  });
+
+historyCmd
+  .command("compare <idA> <idB>")
+  .description("Compare two saved reviews: show resolved, added, and changed issues")
+  .option("--json", "Output comparison as JSON")
+  .action((idA: string, idB: string, opts: { json?: boolean }) => {
+    const a = store.get(idA);
+    if (!a) {
+      console.error(`Review "${idA}" not found.`);
+      process.exit(1);
+    }
+    const b = store.get(idB);
+    if (!b) {
+      console.error(`Review "${idB}" not found.`);
+      process.exit(1);
+    }
+
+    const result = compareReviews(a, b);
+
+    if (opts.json) {
+      process.stdout.write(
+        JSON.stringify({
+          a: result.a,
+          b: result.b,
+          delta: result.delta,
+          resolved: result.resolved.map((c) => ({
+            file: c.file,
+            severity: c.severity,
+            category: c.category,
+            message: c.message,
+          })),
+          added: result.added.map((c) => ({
+            file: c.file,
+            severity: c.severity,
+            category: c.category,
+            message: c.message,
+          })),
+        }) + "\n"
+      );
+      return;
+    }
+
+    const dateA = new Date(result.a.generatedAt).toLocaleString();
+    const dateB = new Date(result.b.generatedAt).toLocaleString();
+    console.log(`\nComparing reviews:`);
+    console.log(`  A: ${result.a.id}  (${dateA}, ${result.a.diffSource}, ${result.a.model})`);
+    console.log(`  B: ${result.b.id}  (${dateB}, ${result.b.diffSource}, ${result.b.model})`);
+
+    const fmtDelta = (n: number) => (n === 0 ? "(no change)" : n > 0 ? `(+${n}) 🔴` : `(${n}) ✅`);
+    const { delta } = result;
+    console.log(`\nStats delta:`);
+    console.log(
+      `  High:   ${result.a.stats.high} → ${result.b.stats.high}  ${fmtDelta(delta.high)}`
+    );
+    console.log(
+      `  Medium: ${result.a.stats.medium} → ${result.b.stats.medium}  ${fmtDelta(delta.medium)}`
+    );
+    console.log(`  Low:    ${result.a.stats.low} → ${result.b.stats.low}  ${fmtDelta(delta.low)}`);
+    console.log(
+      `  Info:   ${result.a.stats.info} → ${result.b.stats.info}  ${fmtDelta(delta.info)}`
+    );
+    console.log(
+      `  Total:  ${result.a.stats.total} → ${result.b.stats.total}  ${fmtDelta(delta.total)}`
+    );
+
+    if (result.resolved.length === 0) {
+      console.log(`\nResolved issues: none`);
+    } else {
+      console.log(`\nResolved issues (in A, not in B): ${result.resolved.length}`);
+      for (const c of result.resolved) {
+        console.log(`  ✅ [${c.severity}] ${c.file}: ${c.message}`);
+      }
+    }
+
+    if (result.added.length === 0) {
+      console.log(`\nNew issues: none\n`);
+    } else {
+      console.log(`\nNew issues (in B, not in A): ${result.added.length}`);
+      for (const c of result.added) {
+        const icon = c.severity === "high" ? "🔴" : c.severity === "medium" ? "🟡" : "🆕";
+        console.log(`  ${icon} [${c.severity}] ${c.file}: ${c.message}`);
+      }
+      console.log();
     }
   });
 
