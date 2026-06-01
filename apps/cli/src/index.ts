@@ -9,6 +9,8 @@ import {
   printJson,
   printPingJson,
   printHistoryStats,
+  printHistoryListJson,
+  printHistoryStatsJson,
   printPingResult,
   saveMarkdown,
 } from "./output.js";
@@ -277,7 +279,8 @@ historyCmd
   .description("List saved reviews (newest first)")
   .option("-n, --limit <number>", "Number of reviews to show", "20")
   .option("-s, --source <pattern>", "Filter by diff source (exact match)")
-  .action((opts: { limit: string; source?: string }) => {
+  .option("--json", "Output as JSON array")
+  .action((opts: { limit: string; source?: string; json?: boolean }) => {
     const limit = parseInt(opts.limit, 10);
     if (isNaN(limit) || limit < 1) {
       console.error(`Invalid --limit "${opts.limit}". Use a positive integer.`);
@@ -287,6 +290,10 @@ historyCmd
       limit,
       ...(opts.source !== undefined ? { diffSource: opts.source } : {}),
     });
+    if (opts.json) {
+      printHistoryListJson(reviews);
+      return;
+    }
     if (reviews.length === 0) {
       console.log("No saved reviews.");
       return;
@@ -306,13 +313,18 @@ historyCmd
 historyCmd
   .command("show <id>")
   .description("Show a saved review by ID")
-  .action((id: string) => {
+  .option("--json", "Output as JSON")
+  .action((id: string, opts: { json?: boolean }) => {
     const review = store.get(id);
     if (!review) {
       console.error(`Review "${id}" not found.`);
       process.exit(1);
     }
-    printReport(review);
+    if (opts.json) {
+      printJson(review);
+    } else {
+      printReport(review);
+    }
   });
 
 historyCmd
@@ -333,10 +345,22 @@ historyCmd
   .command("stats")
   .description("Show aggregate statistics across saved reviews")
   .option("-s, --source <pattern>", "Restrict stats to a specific diff source (exact match)")
-  .action((opts: { source?: string }) => {
+  .option("--json", "Output as JSON")
+  .action((opts: { source?: string; json?: boolean }) => {
     const reviews = store.list(opts.source !== undefined ? { diffSource: opts.source } : {});
     if (reviews.length === 0) {
-      console.log("No saved reviews.");
+      if (opts.json) {
+        printHistoryStatsJson({
+          reviewCount: 0,
+          totalIssues: 0,
+          bySeverity: { high: 0, medium: 0, low: 0, info: 0 },
+          byCategory: {},
+          topSources: [],
+          avgIssuesPerReview: 0,
+        });
+      } else {
+        console.log("No saved reviews.");
+      }
       return;
     }
 
@@ -370,7 +394,11 @@ historyCmd
       avgIssuesPerReview: reviews.length > 0 ? totalIssues / reviews.length : 0,
     };
 
-    printHistoryStats(histStats);
+    if (opts.json) {
+      printHistoryStatsJson(histStats);
+    } else {
+      printHistoryStats(histStats);
+    }
   });
 
 historyCmd
