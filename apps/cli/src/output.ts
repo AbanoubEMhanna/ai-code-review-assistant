@@ -194,6 +194,29 @@ export function printHistoryStatsJson(stats: HistoryStats): void {
   process.stdout.write(JSON.stringify(stats, null, 2) + "\n");
 }
 
+export function printModelsList(models: string[], provider: string, host: string): void {
+  const hostLabel = provider === "anthropic" ? "api.anthropic.com" : host;
+  console.log(`\nModels available on ${chalk.bold(provider)} @ ${chalk.dim(hostLabel)}:\n`);
+  if (models.length === 0) {
+    console.log(chalk.dim("  No models found."));
+    if (provider === "ollama") {
+      console.log(chalk.dim("  Hint: run `ollama pull <model>` to download one."));
+    }
+  } else {
+    for (const m of models) {
+      console.log(`  ${chalk.cyan("•")} ${m}`);
+    }
+  }
+  console.log(`\n  ${chalk.dim(`${models.length} model(s) total`)}\n`);
+}
+
+export function printModelsJson(models: string[], provider: string, host: string): void {
+  const hostLabel = provider === "anthropic" ? "api.anthropic.com" : host;
+  process.stdout.write(
+    JSON.stringify({ provider, host: hostLabel, count: models.length, models }, null, 2) + "\n"
+  );
+}
+
 export interface HistoryStats {
   reviewCount: number;
   totalIssues: number;

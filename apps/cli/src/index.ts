@@ -12,6 +12,8 @@ import {
   printHistoryListJson,
   printHistoryStatsJson,
   printPingResult,
+  printModelsList,
+  printModelsJson,
   saveMarkdown,
 } from "./output.js";
 import type { HistoryStats } from "./output.js";
@@ -326,6 +328,66 @@ program
       if (!report.ok) process.exit(1);
     }
   );
+
+// ─── models command ────────────────────────────────────────────────────────
+
+program
+  .command("models")
+  .description("List available models from the configured AI provider")
+  .option("-H, --host <url>", "AI host URL (Ollama/LM Studio only)", DEFAULT_HOST)
+  .option("-p, --provider <provider>", "Provider: ollama | lmstudio | anthropic", DEFAULT_PROVIDER)
+  .option("-k, --api-key <key>", "API key (Anthropic; or set ANTHROPIC_API_KEY env var)")
+  .option("--json", "Output as JSON")
+  .action(async (opts: { host: string; provider: string; apiKey?: string; json?: boolean }) => {
+    const provider = opts.provider.trim().toLowerCase();
+    if (provider !== "ollama" && provider !== "lmstudio" && provider !== "anthropic") {
+      if (!opts.json) {
+        console.error(
+          `Invalid provider "${opts.provider}". Use "ollama", "lmstudio", or "anthropic".`
+        );
+      } else {
+        process.stderr.write(
+          JSON.stringify({ error: `Invalid provider "${opts.provider}"` }) + "\n"
+        );
+      }
+      process.exit(1);
+    }
+    const apiKey = opts.apiKey ?? DEFAULT_API_KEY;
+    if (provider === "anthropic" && !apiKey) {
+      const msg =
+        "Anthropic provider requires an API key. Set ANTHROPIC_API_KEY or pass --api-key <key>.";
+      if (!opts.json) console.error(msg);
+      else process.stderr.write(JSON.stringify({ error: msg }) + "\n");
+      process.exit(1);
+    }
+    const pingOpts: Parameters<typeof pingProvider>[0] = {
+      provider: provider as ReviewOptions["provider"],
+      host: opts.host,
+      model: DEFAULT_MODEL,
+    };
+    if (apiKey) pingOpts.apiKey = apiKey;
+    const result = await pingProvider(pingOpts).catch(die);
+    if (!result.ok) {
+      if (!opts.json) {
+        console.error(`\nCould not connect to ${provider}: ${result.error ?? "unknown error"}`);
+        if (provider === "ollama") {
+          console.error("Hint: run `ollama serve` to start the server.");
+        } else if (provider === "anthropic") {
+          console.error("Hint: check your API key (console.anthropic.com/settings/keys).");
+        } else {
+          console.error("Hint: make sure LM Studio server is running.");
+        }
+      } else {
+        process.stderr.write(JSON.stringify({ error: result.error }) + "\n");
+      }
+      process.exit(1);
+    }
+    if (opts.json) {
+      printModelsJson(result.availableModels, result.provider, result.host);
+    } else {
+      printModelsList(result.availableModels, result.provider, result.host);
+    }
+  });
 
 // ─── history subcommand group ──────────────────────────────────────────────
 
