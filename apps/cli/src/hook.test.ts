@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -44,7 +52,7 @@ describe("installHook()", () => {
   it("appends --fail-on flag when specified", () => {
     installHook("pre-commit", { gitDir, failOn: "high" });
     const content = readFileSync(join(hooksDir, "pre-commit"), "utf8");
-    expect(content).toContain("ai-review staged --fail-on high");
+    expect(content).toContain("ai-review staged --fail-on 'high'");
   });
 
   it("throws when .git directory not found", () => {
@@ -71,13 +79,14 @@ describe("installHook()", () => {
     installHook("pre-commit", { gitDir });
     installHook("pre-commit", { gitDir, failOn: "medium" });
     const content = readFileSync(join(hooksDir, "pre-commit"), "utf8");
-    expect(content).toContain("--fail-on medium");
+    expect(content).toContain("--fail-on 'medium'");
   });
 
   it("makes the hook file executable", () => {
     installHook("pre-commit", { gitDir });
     const path = join(hooksDir, "pre-commit");
-    expect(existsSync(path)).toBe(true);
+    const stats = statSync(path);
+    expect(stats.mode & 0o111).toBeGreaterThan(0);
   });
 });
 

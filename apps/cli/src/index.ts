@@ -569,17 +569,21 @@ hookCmd
       process.exit(1);
     }
     try {
+      const validatedFailOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
       installHook(hookType as HookType, {
-        ...(opts.failOn !== undefined ? { failOn: opts.failOn } : {}),
+        ...(validatedFailOn !== undefined ? { failOn: validatedFailOn } : {}),
         base: opts.base,
         ...(opts.force !== undefined ? { force: opts.force } : {}),
       });
       console.log(`✓ Installed ${hookType} hook at .git/hooks/${hookType}`);
       if (hookType === "pre-commit") {
-        console.log("  Runs: ai-review staged" + (opts.failOn ? ` --fail-on ${opts.failOn}` : ""));
+        console.log(
+          "  Runs: ai-review staged" + (validatedFailOn ? ` --fail-on ${validatedFailOn}` : "")
+        );
       } else {
         console.log(
-          `  Runs: ai-review branch ${opts.base}` + (opts.failOn ? ` --fail-on ${opts.failOn}` : "")
+          `  Runs: ai-review branch ${opts.base}` +
+            (validatedFailOn ? ` --fail-on ${validatedFailOn}` : "")
         );
       }
       console.log(`  Remove with: ai-review hook uninstall --hook ${hookType}`);

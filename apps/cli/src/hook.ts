@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export type HookType = "pre-commit" | "pre-push";
@@ -10,7 +10,7 @@ function hookPath(gitDir: string, hookType: HookType): string {
 }
 
 function buildScript(hookType: HookType, opts: { failOn?: string; base?: string }): string {
-  const failFlag = opts.failOn ? ` --fail-on ${opts.failOn}` : "";
+  const failFlag = opts.failOn ? ` --fail-on '${opts.failOn.replace(/'/g, "'\\''")}'` : "";
 
   if (hookType === "pre-commit") {
     return (
@@ -40,6 +40,11 @@ export function installHook(
     throw new Error(
       "Not a git repository root — .git directory not found. Run this command from your project root."
     );
+  }
+
+  const hooksDir = join(gitDir, "hooks");
+  if (!existsSync(hooksDir)) {
+    mkdirSync(hooksDir, { recursive: true });
   }
 
   const path = hookPath(gitDir, hookType);
