@@ -12,6 +12,8 @@ import {
   printHistoryListJson,
   printHistoryStatsJson,
   printPingResult,
+  printHistorySearchJson,
+  printConfigJson,
   saveMarkdown,
 } from "./output.js";
 import type { HistoryStats } from "./output.js";
@@ -483,9 +485,14 @@ historyCmd
   .command("search <query>")
   .description("Search saved reviews by keyword (searches summary, source, model, and comments)")
   .option("-n, --limit <number>", "Maximum results to show", "20")
-  .action((query: string, opts: { limit: string }) => {
+  .option("--json", "Output results as JSON array")
+  .action((query: string, opts: { limit: string; json?: boolean }) => {
     const limit = parseInt(opts.limit, 10);
     const results = store.search(query, { limit: isNaN(limit) ? 20 : limit });
+    if (opts.json) {
+      printHistorySearchJson(results);
+      return;
+    }
     if (results.length === 0) {
       console.log(`No reviews matching "${query}".`);
       return;
@@ -510,14 +517,20 @@ const configCmd = program.command("config").description("Manage ai-review config
 configCmd
   .command("show")
   .description("Show the active configuration and its source")
-  .action(() => {
+  .option("--json", "Output configuration as JSON")
+  .action((opts: { json?: boolean }) => {
     const configPath = getConfigFilePath();
-    const effective = {
+    const effective: Record<string, unknown> = {
       model: DEFAULT_MODEL,
       host: DEFAULT_HOST,
       provider: DEFAULT_PROVIDER,
       ...(fileConfig.maxTokens !== undefined ? { maxTokens: fileConfig.maxTokens } : {}),
     };
+
+    if (opts.json) {
+      printConfigJson(effective, configPath ?? null);
+      return;
+    }
 
     console.log("\nEffective configuration:");
     console.log(JSON.stringify(effective, null, 2));
