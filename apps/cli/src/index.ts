@@ -9,6 +9,8 @@ import {
   printJson,
   printPingJson,
   printHistoryStats,
+  printHistoryListJson,
+  printHistoryStatsJson,
   printPingResult,
   saveMarkdown,
 } from "./output.js";
@@ -16,6 +18,7 @@ import type { HistoryStats } from "./output.js";
 import { ReviewHistoryStore } from "./history-store.js";
 import { compareReviews } from "./compare.js";
 import { loadConfig, getConfigFilePath, type AiReviewConfig } from "./config.js";
+import { buildDoctorReport, formatDoctorReport, formatDoctorJson } from "./doctor.js";
 
 const fileConfig: AiReviewConfig = loadConfig();
 
@@ -269,6 +272,62 @@ program
     }
   );
 
+// ─── doctor command ────────────────────────────────────────────────────────
+
+program
+  .command("doctor")
+  .description("Run a health check: verify config, connectivity, and model availability")
+  .option("-H, --host <url>", "AI host URL (Ollama/LM Studio only)", DEFAULT_HOST)
+  .option("-p, --provider <provider>", "Provider: ollama | lmstudio | anthropic", DEFAULT_PROVIDER)
+  .option("-m, --model <model>", "Model name", DEFAULT_MODEL)
+  .option("-k, --api-key <key>", "API key (Anthropic; or set ANTHROPIC_API_KEY env var)")
+  .option("--json", "Output diagnostic result as JSON")
+  .action(
+    async (opts: {
+      host: string;
+      provider: string;
+      model: string;
+      apiKey?: string;
+      json?: boolean;
+    }) => {
+      const provider = opts.provider.trim().toLowerCase() as ReviewOptions["provider"];
+      if (provider !== "ollama" && provider !== "lmstudio" && provider !== "anthropic") {
+        console.error(
+          `Invalid provider "${opts.provider}". Use "ollama", "lmstudio", or "anthropic".`
+        );
+        process.exit(1);
+      }
+
+      const apiKey = opts.apiKey ?? DEFAULT_API_KEY;
+      const effectiveConfig = {
+        model: opts.model,
+        host: provider === "anthropic" ? "api.anthropic.com" : opts.host,
+        provider,
+        ...(apiKey ? { apiKey } : {}),
+      };
+
+      if (!opts.json) process.stdout.write("Running diagnostics…\n");
+
+      const ping = await pingProvider({
+        provider,
+        host: opts.host,
+        model: opts.model,
+        ...(apiKey ? { apiKey } : {}),
+      });
+
+      const configFile = getConfigFilePath();
+      const report = buildDoctorReport(configFile, effectiveConfig, ping);
+
+      if (opts.json) {
+        process.stdout.write(formatDoctorJson(report, effectiveConfig));
+      } else {
+        process.stdout.write(formatDoctorReport(report, effectiveConfig));
+      }
+
+      if (!report.ok) process.exit(1);
+    }
+  );
+
 // ─── history subcommand group ──────────────────────────────────────────────
 
 const historyCmd = program.command("history").description("Manage saved review history");
@@ -278,7 +337,8 @@ historyCmd
   .description("List saved reviews (newest first)")
   .option("-n, --limit <number>", "Number of reviews to show", "20")
   .option("-s, --source <pattern>", "Filter by diff source (exact match)")
-  .action((opts: { limit: string; source?: string }) => {
+  .option("--json", "Output as JSON array")
+  .action((opts: { limit: string; source?: string; json?: boolean }) => {
     const limit = parseInt(opts.limit, 10);
     if (isNaN(limit) || limit < 1) {
       console.error(`Invalid --limit "${opts.limit}". Use a positive integer.`);
@@ -288,6 +348,10 @@ historyCmd
       limit,
       ...(opts.source !== undefined ? { diffSource: opts.source } : {}),
     });
+    if (opts.json) {
+      printHistoryListJson(reviews);
+      return;
+    }
     if (reviews.length === 0) {
       console.log("No saved reviews.");
       return;
@@ -307,13 +371,18 @@ historyCmd
 historyCmd
   .command("show <id>")
   .description("Show a saved review by ID")
-  .action((id: string) => {
+  .option("--json", "Output as JSON")
+  .action((id: string, opts: { json?: boolean }) => {
     const review = store.get(id);
     if (!review) {
       console.error(`Review "${id}" not found.`);
       process.exit(1);
     }
-    printReport(review);
+    if (opts.json) {
+      printJson(review);
+    } else {
+      printReport(review);
+    }
   });
 
 historyCmd
@@ -334,10 +403,22 @@ historyCmd
   .command("stats")
   .description("Show aggregate statistics across saved reviews")
   .option("-s, --source <pattern>", "Restrict stats to a specific diff source (exact match)")
-  .action((opts: { source?: string }) => {
+  .option("--json", "Output as JSON")
+  .action((opts: { source?: string; json?: boolean }) => {
     const reviews = store.list(opts.source !== undefined ? { diffSource: opts.source } : {});
     if (reviews.length === 0) {
-      console.log("No saved reviews.");
+      if (opts.json) {
+        printHistoryStatsJson({
+          reviewCount: 0,
+          totalIssues: 0,
+          bySeverity: { high: 0, medium: 0, low: 0, info: 0 },
+          byCategory: {},
+          topSources: [],
+          avgIssuesPerReview: 0,
+        });
+      } else {
+        console.log("No saved reviews.");
+      }
       return;
     }
 
@@ -371,7 +452,11 @@ historyCmd
       avgIssuesPerReview: reviews.length > 0 ? totalIssues / reviews.length : 0,
     };
 
-    printHistoryStats(histStats);
+    if (opts.json) {
+      printHistoryStatsJson(histStats);
+    } else {
+      printHistoryStats(histStats);
+    }
   });
 
 historyCmd
