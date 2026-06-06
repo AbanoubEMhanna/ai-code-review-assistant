@@ -17,6 +17,7 @@ import {
 import type { HistoryStats } from "./output.js";
 import { ReviewHistoryStore } from "./history-store.js";
 import { loadConfig, getConfigFilePath, type AiReviewConfig } from "./config.js";
+import { buildDoctorReport, formatDoctorReport, formatDoctorJson } from "./doctor.js";
 
 const fileConfig: AiReviewConfig = loadConfig();
 
@@ -267,6 +268,62 @@ program
         printPingResult(result);
       }
       if (!result.ok || !result.modelFound) process.exit(1);
+    }
+  );
+
+// ─── doctor command ────────────────────────────────────────────────────────
+
+program
+  .command("doctor")
+  .description("Run a health check: verify config, connectivity, and model availability")
+  .option("-H, --host <url>", "AI host URL (Ollama/LM Studio only)", DEFAULT_HOST)
+  .option("-p, --provider <provider>", "Provider: ollama | lmstudio | anthropic", DEFAULT_PROVIDER)
+  .option("-m, --model <model>", "Model name", DEFAULT_MODEL)
+  .option("-k, --api-key <key>", "API key (Anthropic; or set ANTHROPIC_API_KEY env var)")
+  .option("--json", "Output diagnostic result as JSON")
+  .action(
+    async (opts: {
+      host: string;
+      provider: string;
+      model: string;
+      apiKey?: string;
+      json?: boolean;
+    }) => {
+      const provider = opts.provider.trim().toLowerCase() as ReviewOptions["provider"];
+      if (provider !== "ollama" && provider !== "lmstudio" && provider !== "anthropic") {
+        console.error(
+          `Invalid provider "${opts.provider}". Use "ollama", "lmstudio", or "anthropic".`
+        );
+        process.exit(1);
+      }
+
+      const apiKey = opts.apiKey ?? DEFAULT_API_KEY;
+      const effectiveConfig = {
+        model: opts.model,
+        host: provider === "anthropic" ? "api.anthropic.com" : opts.host,
+        provider,
+        ...(apiKey ? { apiKey } : {}),
+      };
+
+      if (!opts.json) process.stdout.write("Running diagnostics…\n");
+
+      const ping = await pingProvider({
+        provider,
+        host: opts.host,
+        model: opts.model,
+        ...(apiKey ? { apiKey } : {}),
+      });
+
+      const configFile = getConfigFilePath();
+      const report = buildDoctorReport(configFile, effectiveConfig, ping);
+
+      if (opts.json) {
+        process.stdout.write(formatDoctorJson(report, effectiveConfig));
+      } else {
+        process.stdout.write(formatDoctorReport(report, effectiveConfig));
+      }
+
+      if (!report.ok) process.exit(1);
     }
   );
 
