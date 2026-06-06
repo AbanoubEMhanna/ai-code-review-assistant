@@ -2,6 +2,7 @@ import chalk from "chalk";
 import { writeFileSync } from "node:fs";
 import type { ReviewReport } from "@ai-review/shared";
 import type { PingResult } from "@ai-review/ai";
+import type { StoredReview } from "./history-store.js";
 
 const SEVERITY_COLORS = {
   high: chalk.red.bold,
@@ -183,6 +184,14 @@ export function printJson(report: ReviewReport): void {
 
 export function printPingJson(result: PingResult): void {
   process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+}
+
+export function printHistoryListJson(reviews: StoredReview[]): void {
+  process.stdout.write(JSON.stringify(reviews, null, 2) + "\n");
+}
+
+export function printHistoryStatsJson(stats: HistoryStats): void {
+  process.stdout.write(JSON.stringify(stats, null, 2) + "\n");
 }
 
 export interface HistoryStats {
