@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { writeFileSync } from "node:fs";
 import { program } from "commander";
+import chalk from "chalk";
 import { reviewDiff, pingProvider } from "@ai-review/ai";
 import type { ReviewOptions, ReviewReport, ReviewSeverity } from "@ai-review/shared";
 import { getStagedDiff, getBranchDiff, getFileDiff } from "./git.js";
@@ -18,6 +19,7 @@ import type { HistoryStats } from "./output.js";
 import { ReviewHistoryStore } from "./history-store.js";
 import { loadConfig, getConfigFilePath, type AiReviewConfig } from "./config.js";
 import { buildDoctorReport, formatDoctorReport, formatDoctorJson } from "./doctor.js";
+import { filterReportBySeverity, SEVERITY_RANK } from "./severity-filter.js";
 
 const fileConfig: AiReviewConfig = loadConfig();
 
@@ -30,13 +32,6 @@ const DEFAULT_MODEL =
   fileConfig.model ??
   (DEFAULT_PROVIDER === "anthropic" ? "claude-sonnet-4-6" : "qwen3:latest");
 const DEFAULT_API_KEY = process.env["ANTHROPIC_API_KEY"];
-
-const SEVERITY_RANK: Record<ReviewSeverity, number> = {
-  high: 3,
-  medium: 2,
-  low: 1,
-  info: 0,
-};
 
 function makeOpts(cmd: {
   model: string;
@@ -76,6 +71,12 @@ function parseFailOn(value: string): ReviewSeverity {
   throw new Error(`--fail-on must be one of: high, medium, low, info. Got "${value}"`);
 }
 
+function parseMinSeverity(value: string): ReviewSeverity {
+  const v = value.trim().toLowerCase();
+  if (v === "high" || v === "medium" || v === "low" || v === "info") return v;
+  throw new Error(`--min-severity must be one of: high, medium, low, info. Got "${value}"`);
+}
+
 const store = new ReviewHistoryStore();
 
 async function runReview(
@@ -85,7 +86,8 @@ async function runReview(
   outputFile: string | undefined,
   json: boolean,
   failOn: ReviewSeverity | undefined,
-  noSave: boolean
+  noSave: boolean,
+  minSeverity: ReviewSeverity
 ): Promise<void> {
   if (!json) {
     console.log(`Reviewing ${diffSource} with ${opts.model} via ${opts.provider} (${opts.host})…`);
@@ -109,10 +111,21 @@ async function runReview(
     stats,
   };
 
+  // Save before output so --json can include the assigned id
+  const stored = noSave ? null : store.save(report);
+
   if (json) {
-    printJson(report);
+    printJson(stored ?? report);
   } else {
-    printReport(report);
+    const { filtered, hiddenCount } = filterReportBySeverity(report, minSeverity);
+    printReport(filtered);
+    if (hiddenCount > 0) {
+      console.log(
+        chalk.dim(
+          `  ↳ ${hiddenCount} issue(s) below "${minSeverity}" hidden — use --min-severity info to show all`
+        )
+      );
+    }
   }
 
   if (outputFile) {
@@ -120,9 +133,8 @@ async function runReview(
     if (!json) console.log(`Report saved to ${outputFile}`);
   }
 
-  if (!noSave) {
-    const stored = store.save(report);
-    if (!json) console.log(`Review saved to history (id: ${stored.id})`);
+  if (stored && !json) {
+    console.log(`Review saved to history (id: ${stored.id})`);
   }
 
   if (failOn !== undefined) {
@@ -161,6 +173,11 @@ const sharedOptions = (cmd: ReturnType<typeof program.command>) =>
       "--fail-on <severity>",
       "Exit with code 1 if any issue at this severity or above is found (high|medium|low|info)"
     )
+    .option(
+      "--min-severity <severity>",
+      "Only display issues at or above this severity (high|medium|low|info)",
+      "info"
+    )
     .option("--no-save", "Do not save this review to history");
 
 type SharedOpts = {
@@ -172,6 +189,7 @@ type SharedOpts = {
   apiKey?: string;
   json?: boolean;
   failOn?: string;
+  minSeverity?: string;
   save: boolean;
 };
 
@@ -179,6 +197,7 @@ sharedOptions(program.command("staged").description("Review staged changes (git 
   async (opts: SharedOpts) => {
     const diff = await getStagedDiff().catch(die);
     const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
+    const minSeverity = parseMinSeverity(opts.minSeverity ?? "info");
     await runReview(
       diff,
       "staged changes",
@@ -186,7 +205,8 @@ sharedOptions(program.command("staged").description("Review staged changes (git 
       opts.output,
       !!opts.json,
       failOn,
-      !opts.save
+      !opts.save,
+      minSeverity
     ).catch(die);
   }
 );
@@ -196,6 +216,7 @@ sharedOptions(
 ).action(async (base: string, opts: SharedOpts) => {
   const diff = await getBranchDiff(base).catch(die);
   const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
+  const minSeverity = parseMinSeverity(opts.minSeverity ?? "info");
   await runReview(
     diff,
     `diff vs ${base}`,
@@ -203,7 +224,8 @@ sharedOptions(
     opts.output,
     !!opts.json,
     failOn,
-    !opts.save
+    !opts.save,
+    minSeverity
   ).catch(die);
 });
 
@@ -212,6 +234,7 @@ sharedOptions(
 ).action(async (filePath: string, opts: SharedOpts) => {
   const diff = await getFileDiff(filePath).catch(die);
   const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
+  const minSeverity = parseMinSeverity(opts.minSeverity ?? "info");
   await runReview(
     diff,
     `file: ${filePath}`,
@@ -219,7 +242,8 @@ sharedOptions(
     opts.output,
     !!opts.json,
     failOn,
-    !opts.save
+    !opts.save,
+    minSeverity
   ).catch(die);
 });
 
