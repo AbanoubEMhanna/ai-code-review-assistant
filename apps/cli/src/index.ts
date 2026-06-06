@@ -70,6 +70,29 @@ function makeOpts(cmd: {
   return opts;
 }
 
+function parseDateArg(value: string, endOfDay = false): Date {
+  const v = value.trim();
+  const relMatch = /^(\d+)([dwm])$/i.exec(v);
+  if (relMatch && relMatch[1] !== undefined && relMatch[2] !== undefined) {
+    const n = parseInt(relMatch[1], 10);
+    const unit = relMatch[2].toLowerCase();
+    const msAgo =
+      unit === "d"
+        ? n * 24 * 60 * 60 * 1000
+        : unit === "w"
+          ? n * 7 * 24 * 60 * 60 * 1000
+          : n * 30 * 24 * 60 * 60 * 1000;
+    return new Date(Date.now() - msAgo);
+  }
+  const d = new Date(endOfDay && /^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T23:59:59.999Z` : v);
+  if (isNaN(d.getTime())) {
+    throw new Error(
+      `Invalid date "${value}". Use an ISO date (2024-01-15) or a relative value (7d, 2w, 1m).`
+    );
+  }
+  return d;
+}
+
 function parseFailOn(value: string): ReviewSeverity {
   const v = value.trim().toLowerCase();
   if (v === "high" || v === "medium" || v === "low" || v === "info") return v;
@@ -337,15 +360,28 @@ historyCmd
   .option("-n, --limit <number>", "Number of reviews to show", "20")
   .option("-s, --source <pattern>", "Filter by diff source (exact match)")
   .option("--json", "Output as JSON array")
-  .action((opts: { limit: string; source?: string; json?: boolean }) => {
+  .option("--since <date>", "Only include reviews at or after this date (ISO or 7d/2w/1m)")
+  .option("--until <date>", "Only include reviews at or before this date (ISO or 7d/2w/1m)")
+  .action((opts: { limit: string; source?: string; json?: boolean; since?: string; until?: string }) => {
     const limit = parseInt(opts.limit, 10);
     if (isNaN(limit) || limit < 1) {
       console.error(`Invalid --limit "${opts.limit}". Use a positive integer.`);
       process.exit(1);
     }
+    let since: Date | undefined;
+    let until: Date | undefined;
+    try {
+      if (opts.since !== undefined) since = parseDateArg(opts.since);
+      if (opts.until !== undefined) until = parseDateArg(opts.until, true);
+    } catch (err) {
+      console.error("Error:", err instanceof Error ? err.message : String(err));
+      process.exit(1);
+    }
     const reviews = store.list({
       limit,
       ...(opts.source !== undefined ? { diffSource: opts.source } : {}),
+      ...(since !== undefined ? { since } : {}),
+      ...(until !== undefined ? { until } : {}),
     });
     if (opts.json) {
       printHistoryListJson(reviews);
@@ -403,8 +439,23 @@ historyCmd
   .description("Show aggregate statistics across saved reviews")
   .option("-s, --source <pattern>", "Restrict stats to a specific diff source (exact match)")
   .option("--json", "Output as JSON")
-  .action((opts: { source?: string; json?: boolean }) => {
-    const reviews = store.list(opts.source !== undefined ? { diffSource: opts.source } : {});
+  .option("--since <date>", "Only include reviews at or after this date (ISO or 7d/2w/1m)")
+  .option("--until <date>", "Only include reviews at or before this date (ISO or 7d/2w/1m)")
+  .action((opts: { source?: string; json?: boolean; since?: string; until?: string }) => {
+    let since: Date | undefined;
+    let until: Date | undefined;
+    try {
+      if (opts.since !== undefined) since = parseDateArg(opts.since);
+      if (opts.until !== undefined) until = parseDateArg(opts.until, true);
+    } catch (err) {
+      console.error("Error:", err instanceof Error ? err.message : String(err));
+      process.exit(1);
+    }
+    const reviews = store.list({
+      ...(opts.source !== undefined ? { diffSource: opts.source } : {}),
+      ...(since !== undefined ? { since } : {}),
+      ...(until !== undefined ? { until } : {}),
+    });
     if (reviews.length === 0) {
       if (opts.json) {
         printHistoryStatsJson({
@@ -483,9 +534,28 @@ historyCmd
   .command("search <query>")
   .description("Search saved reviews by keyword (searches summary, source, model, and comments)")
   .option("-n, --limit <number>", "Maximum results to show", "20")
-  .action((query: string, opts: { limit: string }) => {
+  .option("--since <date>", "Only search reviews at or after this date (ISO or 7d/2w/1m)")
+  .option("--until <date>", "Only search reviews at or before this date (ISO or 7d/2w/1m)")
+  .action((query: string, opts: { limit: string; since?: string; until?: string }) => {
     const limit = parseInt(opts.limit, 10);
-    const results = store.search(query, { limit: isNaN(limit) ? 20 : limit });
+    if (isNaN(limit) || limit < 1) {
+      console.error(`Invalid --limit "${opts.limit}". Use a positive integer.`);
+      process.exit(1);
+    }
+    let since: Date | undefined;
+    let until: Date | undefined;
+    try {
+      if (opts.since !== undefined) since = parseDateArg(opts.since);
+      if (opts.until !== undefined) until = parseDateArg(opts.until, true);
+    } catch (err) {
+      console.error("Error:", err instanceof Error ? err.message : String(err));
+      process.exit(1);
+    }
+    const results = store.search(query, {
+      limit,
+      ...(since !== undefined ? { since } : {}),
+      ...(until !== undefined ? { until } : {}),
+    });
     if (results.length === 0) {
       console.log(`No reviews matching "${query}".`);
       return;
