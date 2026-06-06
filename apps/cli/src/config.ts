@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 
@@ -55,4 +55,41 @@ export function getConfigFilePath(): string | null {
   if (projectPath) return projectPath;
   const globalPath = join(homedir(), CONFIG_FILE);
   return existsSync(globalPath) ? globalPath : null;
+}
+
+export const CONFIG_KEYS = ["model", "host", "provider", "maxTokens"] as const;
+export type ConfigKey = (typeof CONFIG_KEYS)[number];
+
+export function isConfigKey(key: string): key is ConfigKey {
+  return (CONFIG_KEYS as readonly string[]).includes(key);
+}
+
+export function setConfigValue(key: ConfigKey, rawValue: string, targetPath?: string): void {
+  const configPath =
+    targetPath ?? findProjectConfig(process.cwd()) ?? join(process.cwd(), CONFIG_FILE);
+  const current = existsSync(configPath) ? readConfigFile(configPath) : {};
+  let value: string | number;
+  if (key === "maxTokens") {
+    const n = parseInt(rawValue, 10);
+    if (isNaN(n) || n < 1) {
+      throw new Error(`"maxTokens" must be a positive integer, got "${rawValue}"`);
+    }
+    value = n;
+  } else {
+    value = rawValue;
+  }
+  const updated: AiReviewConfig = { ...current, [key]: value };
+  writeFileSync(configPath, JSON.stringify(updated, null, 2) + "\n", "utf8");
+}
+
+export function unsetConfigValue(key: ConfigKey, targetPath?: string): boolean {
+  const configPath =
+    targetPath ?? findProjectConfig(process.cwd()) ?? join(process.cwd(), CONFIG_FILE);
+  if (!existsSync(configPath)) return false;
+  const current = readConfigFile(configPath);
+  if (!(key in current)) return false;
+  const updated = { ...current };
+  delete updated[key];
+  writeFileSync(configPath, JSON.stringify(updated, null, 2) + "\n", "utf8");
+  return true;
 }
