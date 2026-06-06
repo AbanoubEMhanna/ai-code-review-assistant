@@ -64,12 +64,12 @@ node apps/cli/dist/index.js staged --output review.md
 
 **Options** (all commands):
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `-m, --model` | `qwen3:latest` | Model name |
-| `-H, --host` | `http://localhost:11434` | AI host URL |
-| `-p, --provider` | `ollama` | `ollama` or `lmstudio` |
-| `-o, --output` | — | Save report to Markdown file |
+| Flag             | Default                  | Description                  |
+| ---------------- | ------------------------ | ---------------------------- |
+| `-m, --model`    | `qwen3:latest`           | Model name                   |
+| `-H, --host`     | `http://localhost:11434` | AI host URL                  |
+| `-p, --provider` | `ollama`                 | `ollama` or `lmstudio`       |
+| `-o, --output`   | —                        | Save report to Markdown file |
 
 **Using LM Studio:**
 
