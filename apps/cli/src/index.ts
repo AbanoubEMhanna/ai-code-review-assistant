@@ -4,6 +4,7 @@ import { program } from "commander";
 import { reviewDiff, pingProvider } from "@ai-review/ai";
 import type { ReviewOptions, ReviewReport, ReviewSeverity } from "@ai-review/shared";
 import { getStagedDiff, getBranchDiff, getFileDiff } from "./git.js";
+import { watchStagedChanges } from "./watch.js";
 import {
   printReport,
   printJson,
@@ -222,6 +223,59 @@ sharedOptions(
     !opts.save
   ).catch(die);
 });
+
+// ─── watch command ─────────────────────────────────────────────────────────
+
+sharedOptions(
+  program
+    .command("watch")
+    .description("Watch staged changes and auto-review whenever the staging area changes")
+)
+  .option("-i, --interval <seconds>", "Polling interval in seconds (minimum 0.5)", "3")
+  .action(async (opts: SharedOpts & { interval: string }) => {
+    const intervalSeconds = parseFloat(opts.interval);
+    if (isNaN(intervalSeconds) || intervalSeconds < 0.5) {
+      console.error(`--interval must be a number >= 0.5 (seconds). Got "${opts.interval}"`);
+      process.exit(1);
+    }
+    const intervalMs = Math.floor(intervalSeconds * 1000);
+    const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
+    const reviewOpts = makeOpts(opts);
+
+    if (!opts.json) {
+      console.log(`Watching staged changes every ${intervalSeconds}s… Press Ctrl+C to stop.\n`);
+    }
+
+    watchStagedChanges({
+      intervalMs,
+      onChanged: async (diff) => {
+        try {
+          await runReview(
+            diff,
+            "staged changes (watch)",
+            reviewOpts,
+            opts.output,
+            !!opts.json,
+            failOn,
+            !opts.save
+          );
+        } catch (err) {
+          console.error("Review error:", err instanceof Error ? err.message : String(err));
+        }
+        if (!opts.json) {
+          console.log(`\nWatching for changes… (last checked ${new Date().toLocaleTimeString()})`);
+        }
+      },
+      onCleared: () => {
+        if (!opts.json) {
+          console.log("\nNo staged changes. Run `git add` to stage files for review…");
+        }
+      },
+    });
+
+    // Keep the process alive until Ctrl+C (SIGINT)
+    await new Promise<never>(() => {});
+  });
 
 // ─── ping command ─────────────────────────────────────────────────────────
 
