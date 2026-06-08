@@ -24,10 +24,13 @@ export interface ReviewReport {
   };
 }
 
+export type ReviewCategory = "bug" | "security" | "performance" | "maintainability" | "style";
+
 export interface ReviewOptions {
   model: string;
   host: string;
   provider: "ollama" | "lmstudio" | "anthropic";
   maxTokens?: number;
   apiKey?: string;
+  focus?: ReviewCategory;
 }
