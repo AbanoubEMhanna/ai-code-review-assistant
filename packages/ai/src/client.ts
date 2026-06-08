@@ -112,9 +112,10 @@ export async function reviewDiff(
     return { summary: "No changes to review.", comments: [] };
   }
 
+  const userPrompt = buildUserPrompt(diff, diffSource, opts.focus);
   const messages = [
     { role: "system", content: SYSTEM_PROMPT },
-    { role: "user", content: buildUserPrompt(diff, diffSource) },
+    { role: "user", content: userPrompt },
   ];
   const maxTokens = opts.maxTokens ?? 4096;
 
@@ -125,13 +126,7 @@ export async function reviewDiff(
         "Anthropic provider requires an API key. Set ANTHROPIC_API_KEY or use --api-key."
       );
     }
-    raw = await anthropicChat(
-      opts.apiKey,
-      opts.model,
-      SYSTEM_PROMPT,
-      buildUserPrompt(diff, diffSource),
-      maxTokens
-    );
+    raw = await anthropicChat(opts.apiKey, opts.model, SYSTEM_PROMPT, userPrompt, maxTokens);
   } else if (opts.provider === "lmstudio") {
     raw = await chatCompletions(opts.host, opts.model, messages, maxTokens);
   } else {

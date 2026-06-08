@@ -23,6 +23,13 @@ Severity guide:
 
 Focus on real issues. Skip obvious or trivial style nitpicks. Respond with only the JSON object, no markdown fences.`;
 
-export function buildUserPrompt(diff: string, diffSource: string): string {
-  return `Review this git diff (${diffSource}):\n\n${diff}`;
+export function buildUserPrompt(diff: string, diffSource: string, focus?: string): string {
+  const base = `Review this git diff (${diffSource}):\n\n${diff}`;
+  if (focus) {
+    return (
+      base +
+      `\n\nFocus your review on ${focus} issues. You may note critical problems in other categories, but prioritize ${focus} in your analysis and comments.`
+    );
+  }
+  return base;
 }
