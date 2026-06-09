@@ -30,4 +30,5 @@ export interface ReviewOptions {
   provider: "ollama" | "lmstudio" | "anthropic";
   maxTokens?: number;
   apiKey?: string;
+  retries?: number;
 }

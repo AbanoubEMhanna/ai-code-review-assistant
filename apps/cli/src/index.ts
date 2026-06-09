@@ -38,6 +38,14 @@ const SEVERITY_RANK: Record<ReviewSeverity, number> = {
   info: 0,
 };
 
+function parseRetries(value: string): number {
+  const n = parseInt(value, 10);
+  if (isNaN(n) || n < 0) {
+    throw new Error(`--retries must be a non-negative integer, got "${value}"`);
+  }
+  return n;
+}
+
 function makeOpts(cmd: {
   model: string;
   host: string;
@@ -45,6 +53,7 @@ function makeOpts(cmd: {
   output?: string;
   maxTokens?: string;
   apiKey?: string;
+  retries?: string;
 }): ReviewOptions {
   const provider = cmd.provider.trim().toLowerCase();
   if (provider !== "ollama" && provider !== "lmstudio" && provider !== "anthropic") {
@@ -66,6 +75,9 @@ function makeOpts(cmd: {
       throw new Error(`--max-tokens must be a positive integer, got "${cmd.maxTokens}"`);
     }
     opts.maxTokens = n;
+  }
+  if (cmd.retries !== undefined) {
+    opts.retries = parseRetries(cmd.retries);
   }
   return opts;
 }
@@ -161,6 +173,10 @@ const sharedOptions = (cmd: ReturnType<typeof program.command>) =>
       "--fail-on <severity>",
       "Exit with code 1 if any issue at this severity or above is found (high|medium|low|info)"
     )
+    .option(
+      "--retries <number>",
+      "Number of times to retry the AI request on failure with exponential backoff (default: 0)"
+    )
     .option("--no-save", "Do not save this review to history");
 
 type SharedOpts = {
@@ -172,6 +188,7 @@ type SharedOpts = {
   apiKey?: string;
   json?: boolean;
   failOn?: string;
+  retries?: string;
   save: boolean;
 };
 
