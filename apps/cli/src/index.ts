@@ -87,7 +87,7 @@ async function runReview(
   json: boolean,
   failOn: ReviewSeverity | undefined,
   noSave: boolean
-): Promise<void> {
+): Promise<ReviewReport> {
   if (!json) {
     console.log(`Reviewing ${diffSource} with ${opts.model} via ${opts.provider} (${opts.host})…`);
   }
@@ -138,6 +138,8 @@ async function runReview(
       process.exit(1);
     }
   }
+
+  return report;
 }
 
 program
@@ -250,15 +252,24 @@ sharedOptions(
       intervalMs,
       onChanged: async (diff) => {
         try {
-          await runReview(
+          const report = await runReview(
             diff,
             "staged changes (watch)",
             reviewOpts,
             opts.output,
             !!opts.json,
-            failOn,
+            undefined, // don't call process.exit inside watch — check threshold below
             !opts.save
           );
+          if (failOn !== undefined) {
+            const threshold = SEVERITY_RANK[failOn];
+            const exceeded = report.comments.some((c) => SEVERITY_RANK[c.severity] >= threshold);
+            if (exceeded && !opts.json) {
+              console.error(
+                `\n⚠  Issues at severity "${failOn}" or above found — continuing to watch…`
+              );
+            }
+          }
         } catch (err) {
           console.error("Review error:", err instanceof Error ? err.message : String(err));
         }

@@ -51,9 +51,16 @@ export async function doWatchTick(
 export function watchStagedChanges(opts: WatchOptions): () => void {
   const fetchDiff = opts.fetchDiff ?? getStagedDiff;
   const state: { value: string | null } = { value: null };
+  let pending = false;
 
   const runTick = (): void => {
-    void doWatchTick(fetchDiff, state, opts).catch(() => {});
+    if (pending) return;
+    pending = true;
+    void doWatchTick(fetchDiff, state, opts)
+      .catch(() => {})
+      .finally(() => {
+        pending = false;
+      });
   };
 
   runTick(); // first check immediately
