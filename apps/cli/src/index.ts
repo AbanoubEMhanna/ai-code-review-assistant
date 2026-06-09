@@ -4,6 +4,7 @@ import { program } from "commander";
 import { reviewDiff, pingProvider } from "@ai-review/ai";
 import type { ReviewOptions, ReviewReport, ReviewSeverity } from "@ai-review/shared";
 import { getStagedDiff, getBranchDiff, getFileDiff } from "./git.js";
+import { watchStagedChanges } from "./watch.js";
 import {
   printReport,
   printJson,
@@ -86,7 +87,7 @@ async function runReview(
   json: boolean,
   failOn: ReviewSeverity | undefined,
   noSave: boolean
-): Promise<void> {
+): Promise<ReviewReport> {
   if (!json) {
     console.log(`Reviewing ${diffSource} with ${opts.model} via ${opts.provider} (${opts.host})…`);
   }
@@ -137,6 +138,8 @@ async function runReview(
       process.exit(1);
     }
   }
+
+  return report;
 }
 
 program
@@ -222,6 +225,68 @@ sharedOptions(
     !opts.save
   ).catch(die);
 });
+
+// ─── watch command ─────────────────────────────────────────────────────────
+
+sharedOptions(
+  program
+    .command("watch")
+    .description("Watch staged changes and auto-review whenever the staging area changes")
+)
+  .option("-i, --interval <seconds>", "Polling interval in seconds (minimum 0.5)", "3")
+  .action(async (opts: SharedOpts & { interval: string }) => {
+    const intervalSeconds = parseFloat(opts.interval);
+    if (isNaN(intervalSeconds) || intervalSeconds < 0.5) {
+      console.error(`--interval must be a number >= 0.5 (seconds). Got "${opts.interval}"`);
+      process.exit(1);
+    }
+    const intervalMs = Math.floor(intervalSeconds * 1000);
+    const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
+    const reviewOpts = makeOpts(opts);
+
+    if (!opts.json) {
+      console.log(`Watching staged changes every ${intervalSeconds}s… Press Ctrl+C to stop.\n`);
+    }
+
+    watchStagedChanges({
+      intervalMs,
+      onChanged: async (diff) => {
+        try {
+          const report = await runReview(
+            diff,
+            "staged changes (watch)",
+            reviewOpts,
+            opts.output,
+            !!opts.json,
+            undefined, // don't call process.exit inside watch — check threshold below
+            !opts.save
+          );
+          if (failOn !== undefined) {
+            const threshold = SEVERITY_RANK[failOn];
+            const exceeded = report.comments.some((c) => SEVERITY_RANK[c.severity] >= threshold);
+            if (exceeded && !opts.json) {
+              console.error(
+                `\n⚠  Issues at severity "${failOn}" or above found — continuing to watch…`
+              );
+            }
+          }
+        } catch (err) {
+          console.error("Review error:", err instanceof Error ? err.message : String(err));
+        }
+        if (!opts.json) {
+          console.log(`\nWatching for changes… (last checked ${new Date().toLocaleTimeString()})`);
+        }
+      },
+      onCleared: () => {
+        if (!opts.json) {
+          console.log("\nNo staged changes. Run `git add` to stage files for review…");
+        }
+      },
+    });
+
+    // Keep the process alive until Ctrl+C (SIGINT)
+    await new Promise<never>(() => {});
+  });
 
 // ─── ping command ─────────────────────────────────────────────────────────
 
