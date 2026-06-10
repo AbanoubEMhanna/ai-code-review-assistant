@@ -30,4 +30,6 @@ export interface ReviewOptions {
   provider: "ollama" | "lmstudio" | "anthropic";
   maxTokens?: number;
   apiKey?: string;
+  /** Request timeout in milliseconds. Defaults: 60 000 ms for Ollama/LM Studio, 120 000 ms for Anthropic. */
+  timeoutMs?: number;
 }
