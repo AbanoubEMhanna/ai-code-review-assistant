@@ -30,6 +30,7 @@ const DEFAULT_MODEL =
   fileConfig.model ??
   (DEFAULT_PROVIDER === "anthropic" ? "claude-sonnet-4-6" : "qwen3:latest");
 const DEFAULT_API_KEY = process.env["ANTHROPIC_API_KEY"];
+const DEFAULT_MAX_TOKENS: number | undefined = fileConfig.maxTokens;
 
 const SEVERITY_RANK: Record<ReviewSeverity, number> = {
   high: 3,
@@ -66,6 +67,8 @@ function makeOpts(cmd: {
       throw new Error(`--max-tokens must be a positive integer, got "${cmd.maxTokens}"`);
     }
     opts.maxTokens = n;
+  } else if (DEFAULT_MAX_TOKENS !== undefined) {
+    opts.maxTokens = DEFAULT_MAX_TOKENS;
   }
   return opts;
 }
@@ -161,7 +164,13 @@ const sharedOptions = (cmd: ReturnType<typeof program.command>) =>
       "--fail-on <severity>",
       "Exit with code 1 if any issue at this severity or above is found (high|medium|low|info)"
     )
-    .option("--no-save", "Do not save this review to history");
+    .option("--no-save", "Do not save this review to history")
+    .option(
+      "-e, --exclude <pattern>",
+      'Exclude files matching pattern from the diff (repeatable; e.g. --exclude "*.lock")',
+      (val: string, prev: string[]) => [...prev, val],
+      [] as string[]
+    );
 
 type SharedOpts = {
   model: string;
@@ -173,11 +182,12 @@ type SharedOpts = {
   json?: boolean;
   failOn?: string;
   save: boolean;
+  exclude: string[];
 };
 
 sharedOptions(program.command("staged").description("Review staged changes (git add)")).action(
   async (opts: SharedOpts) => {
-    const diff = await getStagedDiff().catch(die);
+    const diff = await getStagedDiff(opts.exclude).catch(die);
     const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
     await runReview(
       diff,
@@ -194,7 +204,7 @@ sharedOptions(program.command("staged").description("Review staged changes (git 
 sharedOptions(
   program.command("branch <base>").description("Review commits on HEAD not in <base>")
 ).action(async (base: string, opts: SharedOpts) => {
-  const diff = await getBranchDiff(base).catch(die);
+  const diff = await getBranchDiff(base, opts.exclude).catch(die);
   const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
   await runReview(
     diff,
@@ -210,7 +220,7 @@ sharedOptions(
 sharedOptions(
   program.command("file <path>").description("Review unstaged or staged changes to a specific file")
 ).action(async (filePath: string, opts: SharedOpts) => {
-  const diff = await getFileDiff(filePath).catch(die);
+  const diff = await getFileDiff(filePath, opts.exclude).catch(die);
   const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
   await runReview(
     diff,
