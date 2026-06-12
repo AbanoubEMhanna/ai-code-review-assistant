@@ -101,4 +101,12 @@ describe("getFileDiff exclude patterns", () => {
       ":(exclude)*.snap",
     ]);
   });
+
+  it("handles conflicting pathspec when file matches exclude pattern", async () => {
+    // Documents current behavior: both filePath and exclude pathspec are passed
+    // even when filePath matches the exclude glob; git resolves the conflict
+    mockDiff.mockResolvedValue("diff content");
+    await getFileDiff("package-lock.json", ["*.lock"]);
+    expect(mockDiff).toHaveBeenCalledWith(["HEAD", "--", "package-lock.json", ":(exclude)*.lock"]);
+  });
 });
