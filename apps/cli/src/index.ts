@@ -45,6 +45,7 @@ function makeOpts(cmd: {
   output?: string;
   maxTokens?: string;
   apiKey?: string;
+  timeout?: string;
 }): ReviewOptions {
   const provider = cmd.provider.trim().toLowerCase();
   if (provider !== "ollama" && provider !== "lmstudio" && provider !== "anthropic") {
@@ -66,6 +67,13 @@ function makeOpts(cmd: {
       throw new Error(`--max-tokens must be a positive integer, got "${cmd.maxTokens}"`);
     }
     opts.maxTokens = n;
+  }
+  if (cmd.timeout !== undefined) {
+    const secs = parseFloat(cmd.timeout);
+    if (isNaN(secs) || secs <= 0) {
+      throw new Error(`--timeout must be a positive number (seconds), got "${cmd.timeout}"`);
+    }
+    opts.timeoutMs = Math.round(secs * 1000);
   }
   return opts;
 }
@@ -161,7 +169,11 @@ const sharedOptions = (cmd: ReturnType<typeof program.command>) =>
       "--fail-on <severity>",
       "Exit with code 1 if any issue at this severity or above is found (high|medium|low|info)"
     )
-    .option("--no-save", "Do not save this review to history");
+    .option("--no-save", "Do not save this review to history")
+    .option(
+      "--timeout <seconds>",
+      "Request timeout in seconds (default: 60 for Ollama/LM Studio, 120 for Anthropic)"
+    );
 
 type SharedOpts = {
   model: string;
@@ -173,6 +185,7 @@ type SharedOpts = {
   json?: boolean;
   failOn?: string;
   save: boolean;
+  timeout?: string;
 };
 
 sharedOptions(program.command("staged").description("Review staged changes (git add)")).action(
