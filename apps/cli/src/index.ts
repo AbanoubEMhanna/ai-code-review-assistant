@@ -363,7 +363,8 @@ historyCmd
           : r.stats.medium > 0
             ? `🟡 ${r.stats.medium}M`
             : "✅";
-      console.log(`${r.id}  ${badge}  ${r.diffSource}  (${r.model}, ${date})`);
+      const noteIndicator = r.note !== undefined ? "  📝" : "";
+      console.log(`${r.id}  ${badge}  ${r.diffSource}  (${r.model}, ${date})${noteIndicator}`);
     }
   });
 
@@ -381,6 +382,9 @@ historyCmd
       printJson(review);
     } else {
       printReport(review);
+      if (review.note !== undefined) {
+        console.log(`Note: ${review.note}\n`);
+      }
     }
   });
 
@@ -499,7 +503,45 @@ historyCmd
           : r.stats.medium > 0
             ? `🟡 ${r.stats.medium}M`
             : "✅";
-      console.log(`${r.id}  ${badge}  ${r.diffSource}  (${r.model}, ${date})`);
+      const noteIndicator = r.note !== undefined ? "  📝" : "";
+      console.log(`${r.id}  ${badge}  ${r.diffSource}  (${r.model}, ${date})${noteIndicator}`);
+    }
+  });
+
+historyCmd
+  .command("note <id> [text]")
+  .description(
+    "View or set a personal note on a saved review (omit [text] to view, --clear to remove)"
+  )
+  .option("--clear", "Remove the note from the review")
+  .action((id: string, text: string | undefined, opts: { clear?: boolean }) => {
+    if (opts.clear) {
+      const ok = store.setNote(id, null);
+      if (!ok) {
+        console.error(`Review "${id}" not found.`);
+        process.exit(1);
+      }
+      console.log(`Note cleared for review ${id}.`);
+      return;
+    }
+    if (text !== undefined) {
+      const ok = store.setNote(id, text);
+      if (!ok) {
+        console.error(`Review "${id}" not found.`);
+        process.exit(1);
+      }
+      console.log(`Note saved for review ${id}.`);
+      return;
+    }
+    const review = store.get(id);
+    if (!review) {
+      console.error(`Review "${id}" not found.`);
+      process.exit(1);
+    }
+    if (review.note !== undefined) {
+      console.log(review.note);
+    } else {
+      console.log(`No note set for review ${id}.`);
     }
   });
 

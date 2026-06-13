@@ -5,6 +5,7 @@ import type { ReviewReport } from "@ai-review/shared";
 
 export interface StoredReview extends ReviewReport {
   id: string;
+  note?: string;
 }
 
 const DEFAULT_DIR = join(homedir(), ".ai-review", "history");
@@ -36,6 +37,22 @@ export class ReviewHistoryStore {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Set or clear the personal note on a stored review.
+   * Pass null to remove an existing note.
+   */
+  setNote(id: string, note: string | null): boolean {
+    const review = this.get(id);
+    if (!review) return false;
+    if (note === null) {
+      delete review.note;
+    } else {
+      review.note = note;
+    }
+    writeFileSync(join(this.dir, `${id}.json`), JSON.stringify(review, null, 2), "utf8");
+    return true;
   }
 
   list(opts: { limit?: number; diffSource?: string } = {}): StoredReview[] {
@@ -103,7 +120,13 @@ export class ReviewHistoryStore {
 
     const all = this.list();
     const matches = all.filter((r) => {
-      const haystack = [r.diffSource, r.summary, r.model, ...r.comments.map((c) => c.message)]
+      const haystack = [
+        r.diffSource,
+        r.summary,
+        r.model,
+        r.note ?? "",
+        ...r.comments.map((c) => c.message),
+      ]
         .join(" ")
         .toLowerCase();
       return terms.every((t) => haystack.includes(t));
