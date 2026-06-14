@@ -4,6 +4,7 @@ import { program } from "commander";
 import { reviewDiff, pingProvider } from "@ai-review/ai";
 import type { ReviewOptions, ReviewReport, ReviewSeverity } from "@ai-review/shared";
 import { getStagedDiff, getBranchDiff, getFileDiff } from "./git.js";
+import { readStdin } from "./stdin.js";
 import {
   printReport,
   printJson,
@@ -222,6 +223,26 @@ sharedOptions(
     !opts.save
   ).catch(die);
 });
+
+sharedOptions(
+  program
+    .command("review")
+    .description("Review a diff piped from stdin (e.g. git diff | ai-review review)")
+)
+  .option("-s, --source <label>", "Label for the diff source shown in the report", "stdin")
+  .action(async (opts: SharedOpts & { source: string }) => {
+    const diff = await readStdin().catch(die);
+    const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
+    await runReview(
+      diff,
+      opts.source,
+      makeOpts(opts),
+      opts.output,
+      !!opts.json,
+      failOn,
+      !opts.save
+    ).catch(die);
+  });
 
 // ─── ping command ─────────────────────────────────────────────────────────
 
