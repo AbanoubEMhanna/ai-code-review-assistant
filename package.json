@@ -26,6 +26,9 @@
     "pre-commit": "pnpm exec lint-staged"
   },
   "pnpm": {
+    "overrides": {
+      "esbuild": ">=0.28.1"
+    },
     "onlyBuiltDependencies": [
       "simple-git-hooks"
     ]
