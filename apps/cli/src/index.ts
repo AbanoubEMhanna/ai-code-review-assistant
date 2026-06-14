@@ -383,7 +383,7 @@ historyCmd
     } else {
       printReport(review);
       if (review.note !== undefined) {
-        console.log(`Note: ${review.note}\n`);
+        console.log(`Note: ${review.note}`);
       }
     }
   });
