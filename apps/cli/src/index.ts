@@ -12,6 +12,7 @@ import {
   printHistoryListJson,
   printHistoryStatsJson,
   printPingResult,
+  printGitHubAnnotations,
   saveMarkdown,
 } from "./output.js";
 import type { HistoryStats } from "./output.js";
@@ -20,6 +21,8 @@ import { loadConfig, getConfigFilePath, type AiReviewConfig } from "./config.js"
 import { buildDoctorReport, formatDoctorReport, formatDoctorJson } from "./doctor.js";
 
 const fileConfig: AiReviewConfig = loadConfig();
+
+const AUTO_GHA = process.env["GITHUB_ACTIONS"] === "true";
 
 const DEFAULT_HOST = process.env["AI_HOST"] ?? fileConfig.host ?? "http://localhost:11434";
 const DEFAULT_PROVIDER = (process.env["AI_PROVIDER"] ??
@@ -85,7 +88,8 @@ async function runReview(
   outputFile: string | undefined,
   json: boolean,
   failOn: ReviewSeverity | undefined,
-  noSave: boolean
+  noSave: boolean,
+  gha: boolean
 ): Promise<void> {
   if (!json) {
     console.log(`Reviewing ${diffSource} with ${opts.model} via ${opts.provider} (${opts.host})…`);
@@ -113,6 +117,10 @@ async function runReview(
     printJson(report);
   } else {
     printReport(report);
+  }
+
+  if (gha) {
+    printGitHubAnnotations(report);
   }
 
   if (outputFile) {
@@ -161,7 +169,11 @@ const sharedOptions = (cmd: ReturnType<typeof program.command>) =>
       "--fail-on <severity>",
       "Exit with code 1 if any issue at this severity or above is found (high|medium|low|info)"
     )
-    .option("--no-save", "Do not save this review to history");
+    .option("--no-save", "Do not save this review to history")
+    .option(
+      "--gha",
+      "Emit GitHub Actions annotations (::error::, ::warning::, ::notice::). Auto-enabled when GITHUB_ACTIONS=true."
+    );
 
 type SharedOpts = {
   model: string;
@@ -173,6 +185,7 @@ type SharedOpts = {
   json?: boolean;
   failOn?: string;
   save: boolean;
+  gha?: boolean;
 };
 
 sharedOptions(program.command("staged").description("Review staged changes (git add)")).action(
@@ -186,7 +199,8 @@ sharedOptions(program.command("staged").description("Review staged changes (git 
       opts.output,
       !!opts.json,
       failOn,
-      !opts.save
+      !opts.save,
+      !!opts.gha || AUTO_GHA
     ).catch(die);
   }
 );
@@ -203,7 +217,8 @@ sharedOptions(
     opts.output,
     !!opts.json,
     failOn,
-    !opts.save
+    !opts.save,
+    !!opts.gha || AUTO_GHA
   ).catch(die);
 });
 
@@ -219,7 +234,8 @@ sharedOptions(
     opts.output,
     !!opts.json,
     failOn,
-    !opts.save
+    !opts.save,
+    !!opts.gha || AUTO_GHA
   ).catch(die);
 });
 

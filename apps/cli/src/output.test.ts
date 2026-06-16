@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { PingResult } from "@ai-review/ai";
-import { printPingJson, printPingResult } from "./output.js";
+import type { ReviewReport } from "@ai-review/shared";
+import { printPingJson, printPingResult, printGitHubAnnotations } from "./output.js";
 
 function makePingResult(overrides: Partial<PingResult> = {}): PingResult {
   return {
@@ -142,5 +143,179 @@ describe("printPingResult — human-readable output", () => {
 
     const joined = lines.join("\n");
     expect(joined).not.toContain("ollama pull");
+  });
+});
+
+describe("printGitHubAnnotations", () => {
+  function makeReport(overrides: Partial<ReviewReport> = {}): ReviewReport {
+    return {
+      generatedAt: "2026-06-16T00:00:00.000Z",
+      model: "qwen3:latest",
+      diffSource: "staged changes",
+      summary: "Some issues found.",
+      stats: { high: 1, medium: 1, low: 1, info: 1, total: 4 },
+      comments: [],
+      ...overrides,
+    };
+  }
+
+  it("emits ::error:: for high-severity comments", () => {
+    const written: string[] = [];
+    vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      written.push(String(chunk));
+      return true;
+    });
+
+    printGitHubAnnotations(
+      makeReport({
+        comments: [
+          {
+            file: "src/auth.ts",
+            line: 42,
+            severity: "high",
+            category: "security",
+            message: "SQL injection risk",
+          },
+        ],
+      })
+    );
+
+    expect(written).toHaveLength(1);
+    expect(written[0]).toMatch(/^::error /);
+    expect(written[0]).toContain("file=src/auth.ts");
+    expect(written[0]).toContain("line=42");
+    expect(written[0]).toContain("SQL injection risk");
+  });
+
+  it("emits ::warning:: for medium-severity comments", () => {
+    const written: string[] = [];
+    vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      written.push(String(chunk));
+      return true;
+    });
+
+    printGitHubAnnotations(
+      makeReport({
+        comments: [
+          {
+            file: "src/api.ts",
+            severity: "medium",
+            category: "performance",
+            message: "N+1 query detected",
+          },
+        ],
+      })
+    );
+
+    expect(written[0]).toMatch(/^::warning /);
+    expect(written[0]).toContain("N+1 query detected");
+  });
+
+  it("emits ::notice:: for low and info severity", () => {
+    const written: string[] = [];
+    vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      written.push(String(chunk));
+      return true;
+    });
+
+    printGitHubAnnotations(
+      makeReport({
+        comments: [
+          { file: "src/a.ts", severity: "low", category: "style", message: "Nit" },
+          { file: "src/b.ts", severity: "info", category: "maintainability", message: "FYI" },
+        ],
+      })
+    );
+
+    expect(written[0]).toMatch(/^::notice /);
+    expect(written[1]).toMatch(/^::notice /);
+  });
+
+  it("omits file= when file is 'unknown'", () => {
+    const written: string[] = [];
+    vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      written.push(String(chunk));
+      return true;
+    });
+
+    printGitHubAnnotations(
+      makeReport({
+        comments: [{ file: "unknown", severity: "high", category: "bug", message: "Bad code" }],
+      })
+    );
+
+    expect(written[0]).not.toContain("file=");
+  });
+
+  it("omits line= when line is undefined", () => {
+    const written: string[] = [];
+    vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      written.push(String(chunk));
+      return true;
+    });
+
+    printGitHubAnnotations(
+      makeReport({
+        comments: [
+          { file: "src/foo.ts", severity: "medium", category: "bug", message: "Issue here" },
+        ],
+      })
+    );
+
+    expect(written[0]).not.toContain("line=");
+    expect(written[0]).toContain("file=src/foo.ts");
+  });
+
+  it("appends suggestion to annotation body", () => {
+    const written: string[] = [];
+    vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      written.push(String(chunk));
+      return true;
+    });
+
+    printGitHubAnnotations(
+      makeReport({
+        comments: [
+          {
+            file: "src/foo.ts",
+            severity: "high",
+            category: "bug",
+            message: "Null check missing",
+            suggestion: "Add an early return guard",
+          },
+        ],
+      })
+    );
+
+    expect(written[0]).toContain("Null check missing");
+    expect(written[0]).toContain("Add an early return guard");
+  });
+
+  it("emits nothing when there are no comments", () => {
+    const written: string[] = [];
+    vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      written.push(String(chunk));
+      return true;
+    });
+
+    printGitHubAnnotations(makeReport({ comments: [] }));
+
+    expect(written).toHaveLength(0);
+  });
+
+  it("each annotation ends with a newline", () => {
+    const written: string[] = [];
+    vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      written.push(String(chunk));
+      return true;
+    });
+
+    printGitHubAnnotations(
+      makeReport({
+        comments: [{ file: "src/x.ts", severity: "low", category: "style", message: "Minor" }],
+      })
+    );
+
+    expect(written[0]).toMatch(/\n$/);
   });
 });

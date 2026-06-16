@@ -203,6 +203,23 @@ export interface HistoryStats {
   avgIssuesPerReview: number;
 }
 
+export function printGitHubAnnotations(report: ReviewReport): void {
+  const levelMap: Record<string, "error" | "warning" | "notice"> = {
+    high: "error",
+    medium: "warning",
+    low: "notice",
+    info: "notice",
+  };
+  for (const c of report.comments) {
+    const level = levelMap[c.severity] ?? "notice";
+    const params: string[] = [`title=[${c.category}]`];
+    if (c.file && c.file !== "unknown") params.push(`file=${c.file}`);
+    if (c.line != null) params.push(`line=${c.line}`);
+    const body = c.suggestion ? `${c.message} Suggestion: ${c.suggestion}` : c.message;
+    process.stdout.write(`::${level} ${params.join(",")}::${body}\n`);
+  }
+}
+
 export function printHistoryStats(stats: HistoryStats): void {
   console.log("\n" + chalk.bold.underline("Review History Stats"));
   console.log(
