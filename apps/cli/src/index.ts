@@ -362,46 +362,48 @@ historyCmd
   .option("--json", "Output as JSON array")
   .option("--since <date>", "Only include reviews at or after this date (ISO or 7d/2w/1m)")
   .option("--until <date>", "Only include reviews at or before this date (ISO or 7d/2w/1m)")
-  .action((opts: { limit: string; source?: string; json?: boolean; since?: string; until?: string }) => {
-    const limit = parseInt(opts.limit, 10);
-    if (isNaN(limit) || limit < 1) {
-      console.error(`Invalid --limit "${opts.limit}". Use a positive integer.`);
-      process.exit(1);
+  .action(
+    (opts: { limit: string; source?: string; json?: boolean; since?: string; until?: string }) => {
+      const limit = parseInt(opts.limit, 10);
+      if (isNaN(limit) || limit < 1) {
+        console.error(`Invalid --limit "${opts.limit}". Use a positive integer.`);
+        process.exit(1);
+      }
+      let since: Date | undefined;
+      let until: Date | undefined;
+      try {
+        if (opts.since !== undefined) since = parseDateArg(opts.since);
+        if (opts.until !== undefined) until = parseDateArg(opts.until, true);
+      } catch (err) {
+        console.error("Error:", err instanceof Error ? err.message : String(err));
+        process.exit(1);
+      }
+      const reviews = store.list({
+        limit,
+        ...(opts.source !== undefined ? { diffSource: opts.source } : {}),
+        ...(since !== undefined ? { since } : {}),
+        ...(until !== undefined ? { until } : {}),
+      });
+      if (opts.json) {
+        printHistoryListJson(reviews);
+        return;
+      }
+      if (reviews.length === 0) {
+        console.log("No saved reviews.");
+        return;
+      }
+      for (const r of reviews) {
+        const date = new Date(r.generatedAt).toLocaleString();
+        const badge =
+          r.stats.high > 0
+            ? `🔴 ${r.stats.high}H`
+            : r.stats.medium > 0
+              ? `🟡 ${r.stats.medium}M`
+              : "✅";
+        console.log(`${r.id}  ${badge}  ${r.diffSource}  (${r.model}, ${date})`);
+      }
     }
-    let since: Date | undefined;
-    let until: Date | undefined;
-    try {
-      if (opts.since !== undefined) since = parseDateArg(opts.since);
-      if (opts.until !== undefined) until = parseDateArg(opts.until, true);
-    } catch (err) {
-      console.error("Error:", err instanceof Error ? err.message : String(err));
-      process.exit(1);
-    }
-    const reviews = store.list({
-      limit,
-      ...(opts.source !== undefined ? { diffSource: opts.source } : {}),
-      ...(since !== undefined ? { since } : {}),
-      ...(until !== undefined ? { until } : {}),
-    });
-    if (opts.json) {
-      printHistoryListJson(reviews);
-      return;
-    }
-    if (reviews.length === 0) {
-      console.log("No saved reviews.");
-      return;
-    }
-    for (const r of reviews) {
-      const date = new Date(r.generatedAt).toLocaleString();
-      const badge =
-        r.stats.high > 0
-          ? `🔴 ${r.stats.high}H`
-          : r.stats.medium > 0
-            ? `🟡 ${r.stats.medium}M`
-            : "✅";
-      console.log(`${r.id}  ${badge}  ${r.diffSource}  (${r.model}, ${date})`);
-    }
-  });
+  );
 
 historyCmd
   .command("show <id>")
