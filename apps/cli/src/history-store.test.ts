@@ -30,6 +30,57 @@ afterEach(() => {
   rmSync(dir, { recursive: true });
 });
 
+describe("ReviewHistoryStore.list() model filter", () => {
+  it("returns all reviews when no model filter is set", () => {
+    store.save(makeReport({ model: "llama3:latest" }));
+    store.save(makeReport({ model: "qwen3:latest" }));
+    expect(store.list()).toHaveLength(2);
+  });
+
+  it("filters reviews by exact model name", () => {
+    store.save(makeReport({ model: "llama3:latest" }));
+    store.save(makeReport({ model: "qwen3:latest" }));
+    const results = store.list({ model: "llama3:latest" });
+    expect(results).toHaveLength(1);
+    expect(results[0]?.model).toBe("llama3:latest");
+  });
+
+  it("filters reviews by model substring (case-insensitive)", () => {
+    store.save(makeReport({ model: "llama3:latest" }));
+    store.save(makeReport({ model: "qwen3:latest" }));
+    store.save(makeReport({ model: "LLAMA3:8B" }));
+    const results = store.list({ model: "llama" });
+    expect(results).toHaveLength(2);
+    results.forEach((r) => expect(r.model.toLowerCase()).toContain("llama"));
+  });
+
+  it("returns empty array when no reviews match the model filter", () => {
+    store.save(makeReport({ model: "llama3:latest" }));
+    const results = store.list({ model: "mistral" });
+    expect(results).toHaveLength(0);
+  });
+
+  it("combines model filter with diffSource filter", () => {
+    store.save(makeReport({ model: "llama3:latest", diffSource: "staged changes" }));
+    store.save(makeReport({ model: "llama3:latest", diffSource: "diff vs main" }));
+    store.save(makeReport({ model: "qwen3:latest", diffSource: "staged changes" }));
+    const results = store.list({ model: "llama3", diffSource: "staged changes" });
+    expect(results).toHaveLength(1);
+    expect(results[0]?.model).toBe("llama3:latest");
+    expect(results[0]?.diffSource).toBe("staged changes");
+  });
+
+  it("combines model filter with limit", () => {
+    for (let i = 0; i < 5; i++) {
+      store.save(makeReport({ model: "llama3:latest" }));
+    }
+    store.save(makeReport({ model: "qwen3:latest" }));
+    const results = store.list({ model: "llama3", limit: 3 });
+    expect(results).toHaveLength(3);
+    results.forEach((r) => expect(r.model).toBe("llama3:latest"));
+  });
+});
+
 describe("ReviewHistoryStore.search()", () => {
   it("returns empty array for blank query", () => {
     store.save(makeReport({ summary: "looks good" }));

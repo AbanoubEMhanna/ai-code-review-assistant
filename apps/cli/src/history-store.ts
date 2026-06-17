@@ -38,7 +38,7 @@ export class ReviewHistoryStore {
     }
   }
 
-  list(opts: { limit?: number; diffSource?: string } = {}): StoredReview[] {
+  list(opts: { limit?: number; diffSource?: string; model?: string } = {}): StoredReview[] {
     let files: string[];
     try {
       files = readdirSync(this.dir).filter((f) => f.endsWith(".json"));
@@ -57,6 +57,10 @@ export class ReviewHistoryStore {
 
     if (opts.diffSource !== undefined) {
       reviews = reviews.filter((r) => r.diffSource === opts.diffSource);
+    }
+    if (opts.model !== undefined) {
+      const modelFilter = opts.model.toLowerCase();
+      reviews = reviews.filter((r) => r.model.toLowerCase().includes(modelFilter));
     }
     if (opts.limit && opts.limit > 0) {
       reviews = reviews.slice(0, opts.limit);
