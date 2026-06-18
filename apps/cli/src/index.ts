@@ -4,6 +4,7 @@ import { program } from "commander";
 import { reviewDiff, pingProvider } from "@ai-review/ai";
 import type { ReviewOptions, ReviewReport, ReviewSeverity } from "@ai-review/shared";
 import { getStagedDiff, getBranchDiff, getFileDiff } from "./git.js";
+import { limitReportIssues } from "./max-issues.js";
 import {
   printReport,
   printJson,
@@ -76,6 +77,15 @@ function parseFailOn(value: string): ReviewSeverity {
   throw new Error(`--fail-on must be one of: high, medium, low, info. Got "${value}"`);
 }
 
+function parseMaxIssues(value: string | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  const n = parseInt(value, 10);
+  if (isNaN(n) || n < 1) {
+    throw new Error(`--max-issues must be a positive integer, got "${value}"`);
+  }
+  return n;
+}
+
 const store = new ReviewHistoryStore();
 
 async function runReview(
@@ -85,7 +95,8 @@ async function runReview(
   outputFile: string | undefined,
   json: boolean,
   failOn: ReviewSeverity | undefined,
-  noSave: boolean
+  noSave: boolean,
+  maxIssues: number | undefined
 ): Promise<void> {
   if (!json) {
     console.log(`Reviewing ${diffSource} with ${opts.model} via ${opts.provider} (${opts.host})…`);
@@ -109,22 +120,38 @@ async function runReview(
     stats,
   };
 
-  if (json) {
-    printJson(report);
-  } else {
-    printReport(report);
-  }
-
-  if (outputFile) {
-    saveMarkdown(report, outputFile);
-    if (!json) console.log(`Report saved to ${outputFile}`);
-  }
-
+  // Save the full (unfiltered) report to history
   if (!noSave) {
     const stored = store.save(report);
     if (!json) console.log(`Review saved to history (id: ${stored.id})`);
   }
 
+  // Apply display-only filter: show top N issues by severity
+  let displayReport = report;
+  let hiddenCount = 0;
+  if (maxIssues !== undefined) {
+    const result = limitReportIssues(report, maxIssues);
+    displayReport = result.report;
+    hiddenCount = result.hiddenCount;
+  }
+
+  if (json) {
+    printJson(displayReport);
+  } else {
+    printReport(displayReport);
+    if (hiddenCount > 0) {
+      console.log(
+        `\n  ↳ ${hiddenCount} issue(s) hidden — remove --max-issues or increase the limit to see all`
+      );
+    }
+  }
+
+  if (outputFile) {
+    saveMarkdown(displayReport, outputFile);
+    if (!json) console.log(`Report saved to ${outputFile}`);
+  }
+
+  // fail-on uses the full report so hidden issues can still trigger CI failure
   if (failOn !== undefined) {
     const threshold = SEVERITY_RANK[failOn];
     const exceeded = comments.some((c) => SEVERITY_RANK[c.severity] >= threshold);
@@ -161,7 +188,8 @@ const sharedOptions = (cmd: ReturnType<typeof program.command>) =>
       "--fail-on <severity>",
       "Exit with code 1 if any issue at this severity or above is found (high|medium|low|info)"
     )
-    .option("--no-save", "Do not save this review to history");
+    .option("--no-save", "Do not save this review to history")
+    .option("-N, --max-issues <number>", "Show only the top N issues ordered by severity");
 
 type SharedOpts = {
   model: string;
@@ -173,12 +201,14 @@ type SharedOpts = {
   json?: boolean;
   failOn?: string;
   save: boolean;
+  maxIssues?: string;
 };
 
 sharedOptions(program.command("staged").description("Review staged changes (git add)")).action(
   async (opts: SharedOpts) => {
     const diff = await getStagedDiff().catch(die);
     const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
+    const maxIssues = parseMaxIssues(opts.maxIssues);
     await runReview(
       diff,
       "staged changes",
@@ -186,7 +216,8 @@ sharedOptions(program.command("staged").description("Review staged changes (git 
       opts.output,
       !!opts.json,
       failOn,
-      !opts.save
+      !opts.save,
+      maxIssues
     ).catch(die);
   }
 );
@@ -196,6 +227,7 @@ sharedOptions(
 ).action(async (base: string, opts: SharedOpts) => {
   const diff = await getBranchDiff(base).catch(die);
   const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
+  const maxIssues = parseMaxIssues(opts.maxIssues);
   await runReview(
     diff,
     `diff vs ${base}`,
@@ -203,7 +235,8 @@ sharedOptions(
     opts.output,
     !!opts.json,
     failOn,
-    !opts.save
+    !opts.save,
+    maxIssues
   ).catch(die);
 });
 
@@ -212,6 +245,7 @@ sharedOptions(
 ).action(async (filePath: string, opts: SharedOpts) => {
   const diff = await getFileDiff(filePath).catch(die);
   const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
+  const maxIssues = parseMaxIssues(opts.maxIssues);
   await runReview(
     diff,
     `file: ${filePath}`,
@@ -219,7 +253,8 @@ sharedOptions(
     opts.output,
     !!opts.json,
     failOn,
-    !opts.save
+    !opts.save,
+    maxIssues
   ).catch(die);
 });
 
