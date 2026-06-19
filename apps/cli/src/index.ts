@@ -18,6 +18,7 @@ import type { HistoryStats } from "./output.js";
 import { ReviewHistoryStore } from "./history-store.js";
 import { loadConfig, getConfigFilePath, type AiReviewConfig } from "./config.js";
 import { buildDoctorReport, formatDoctorReport, formatDoctorJson } from "./doctor.js";
+import { getDiffStats, isLargeDiff, type DiffStats } from "./diff-stats.js";
 
 const fileConfig: AiReviewConfig = loadConfig();
 
@@ -78,6 +79,31 @@ function parseFailOn(value: string): ReviewSeverity {
 
 const store = new ReviewHistoryStore();
 
+function printDryRunStats(diffSource: string, stats: DiffStats, json: boolean): void {
+  if (json) {
+    process.stdout.write(JSON.stringify({ dryRun: true, diffSource, stats }, null, 2) + "\n");
+    return;
+  }
+  const fmt = (n: number) => n.toLocaleString();
+  console.log(`\nDry-run: ${diffSource}`);
+  console.log(`  Files changed : ${stats.fileCount}`);
+  console.log(`  Lines added   : +${stats.linesAdded}`);
+  console.log(`  Lines removed : -${stats.linesRemoved}`);
+  console.log(`  Char count    : ${fmt(stats.charCount)}`);
+  console.log(`  Est. tokens   : ~${fmt(stats.estimatedTokens)}`);
+  if (stats.files.length > 0) {
+    console.log("\n  Files:");
+    for (const f of stats.files) console.log(`    • ${f}`);
+  }
+  if (isLargeDiff(stats)) {
+    console.warn(
+      `\n⚠ This diff is large (~${fmt(stats.estimatedTokens)} est. tokens) and may exceed your model's context window.`
+    );
+    console.warn("  Consider using --exclude to skip generated or vendor files.");
+  }
+  console.log("\nNo AI request made (--dry-run).");
+}
+
 async function runReview(
   diff: string,
   diffSource: string,
@@ -85,8 +111,13 @@ async function runReview(
   outputFile: string | undefined,
   json: boolean,
   failOn: ReviewSeverity | undefined,
-  noSave: boolean
+  noSave: boolean,
+  dryRun: boolean
 ): Promise<void> {
+  if (dryRun) {
+    printDryRunStats(diffSource, getDiffStats(diff), json);
+    return;
+  }
   if (!json) {
     console.log(`Reviewing ${diffSource} with ${opts.model} via ${opts.provider} (${opts.host})…`);
   }
@@ -161,7 +192,8 @@ const sharedOptions = (cmd: ReturnType<typeof program.command>) =>
       "--fail-on <severity>",
       "Exit with code 1 if any issue at this severity or above is found (high|medium|low|info)"
     )
-    .option("--no-save", "Do not save this review to history");
+    .option("--no-save", "Do not save this review to history")
+    .option("--dry-run", "Preview diff stats without sending to AI");
 
 type SharedOpts = {
   model: string;
@@ -173,6 +205,7 @@ type SharedOpts = {
   json?: boolean;
   failOn?: string;
   save: boolean;
+  dryRun?: boolean;
 };
 
 sharedOptions(program.command("staged").description("Review staged changes (git add)")).action(
@@ -186,7 +219,8 @@ sharedOptions(program.command("staged").description("Review staged changes (git 
       opts.output,
       !!opts.json,
       failOn,
-      !opts.save
+      !opts.save,
+      !!opts.dryRun
     ).catch(die);
   }
 );
@@ -203,7 +237,8 @@ sharedOptions(
     opts.output,
     !!opts.json,
     failOn,
-    !opts.save
+    !opts.save,
+    !!opts.dryRun
   ).catch(die);
 });
 
@@ -219,7 +254,8 @@ sharedOptions(
     opts.output,
     !!opts.json,
     failOn,
-    !opts.save
+    !opts.save,
+    !!opts.dryRun
   ).catch(die);
 });
 
