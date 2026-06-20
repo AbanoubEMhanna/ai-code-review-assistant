@@ -18,6 +18,11 @@ import type { HistoryStats } from "./output.js";
 import { ReviewHistoryStore } from "./history-store.js";
 import { loadConfig, getConfigFilePath, type AiReviewConfig } from "./config.js";
 import { buildDoctorReport, formatDoctorReport, formatDoctorJson } from "./doctor.js";
+import {
+  generateBashCompletion,
+  generateZshCompletion,
+  generateFishCompletion,
+} from "./completion.js";
 
 const fileConfig: AiReviewConfig = loadConfig();
 
@@ -326,6 +331,26 @@ program
       if (!report.ok) process.exit(1);
     }
   );
+
+// ─── completion command ────────────────────────────────────────────────────
+
+program
+  .command("completion")
+  .description("Output shell completion script (bash, zsh, or fish)")
+  .requiredOption("-s, --shell <shell>", "Shell type: bash | zsh | fish")
+  .action((opts: { shell: string }) => {
+    const shell = opts.shell.trim().toLowerCase();
+    if (shell === "bash") {
+      process.stdout.write(generateBashCompletion());
+    } else if (shell === "zsh") {
+      process.stdout.write(generateZshCompletion());
+    } else if (shell === "fish") {
+      process.stdout.write(generateFishCompletion());
+    } else {
+      console.error(`Unknown shell "${opts.shell}". Supported shells: bash, zsh, fish.`);
+      process.exit(1);
+    }
+  });
 
 // ─── history subcommand group ──────────────────────────────────────────────
 
