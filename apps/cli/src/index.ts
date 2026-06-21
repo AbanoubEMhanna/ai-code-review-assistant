@@ -474,7 +474,12 @@ historyCmd
 historyCmd
   .command("clear")
   .description("Delete all saved reviews")
-  .action(() => {
+  .option("--force", "Skip confirmation and delete immediately")
+  .action((opts: { force?: boolean }) => {
+    if (!opts.force) {
+      console.error("This will permanently delete all saved reviews. Add --force to confirm.");
+      process.exit(1);
+    }
     const n = store.clear();
     console.log(`Cleared ${n} review(s) from history.`);
   });
