@@ -3,7 +3,7 @@ import { writeFileSync } from "node:fs";
 import { program } from "commander";
 import { reviewDiff, pingProvider } from "@ai-review/ai";
 import type { ReviewOptions, ReviewReport, ReviewSeverity } from "@ai-review/shared";
-import { getStagedDiff, getBranchDiff, getFileDiff } from "./git.js";
+import { getStagedDiff, getBranchDiff, getFileDiff, parseDiffStats } from "./git.js";
 import {
   printReport,
   printJson,
@@ -88,7 +88,11 @@ async function runReview(
   noSave: boolean
 ): Promise<void> {
   if (!json) {
-    console.log(`Reviewing ${diffSource} with ${opts.model} via ${opts.provider} (${opts.host})…`);
+    const { files, insertions, deletions } = parseDiffStats(diff);
+    const statStr = `${files} file${files !== 1 ? "s" : ""}, +${insertions}/-${deletions}`;
+    console.log(
+      `Reviewing ${diffSource} (${statStr}) with ${opts.model} via ${opts.provider} (${opts.host})…`
+    );
   }
   const { summary, comments } = await reviewDiff(diff, diffSource, opts);
 
