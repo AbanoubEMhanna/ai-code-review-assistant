@@ -512,11 +512,12 @@ historyCmd
   .option("-n, --limit <number>", "Number of files to show", "10")
   .option("--json", "Output as JSON array")
   .action((opts: { limit: string; json?: boolean }) => {
-    const limit = parseInt(opts.limit, 10);
-    if (isNaN(limit) || limit < 1) {
+    const rawLimit = opts.limit.trim();
+    if (!/^[1-9]\d*$/.test(rawLimit)) {
       console.error(`Invalid --limit "${opts.limit}". Use a positive integer.`);
       process.exit(1);
     }
+    const limit = Number(rawLimit);
     const reviews = store.list();
     const entries = computeTopFiles(reviews, limit);
     if (opts.json) {
