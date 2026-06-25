@@ -70,6 +70,14 @@ function makeOpts(cmd: {
   return opts;
 }
 
+function parseMaxDiffLines(value: string): number {
+  const rawValue = value.trim();
+  if (!/^[1-9]\d*$/.test(rawValue)) {
+    throw new Error(`--max-diff-lines must be a positive integer, got "${value}"`);
+  }
+  return Number(rawValue);
+}
+
 function parseFailOn(value: string): ReviewSeverity {
   const v = value.trim().toLowerCase();
   if (v === "high" || v === "medium" || v === "low" || v === "info") return v;
@@ -78,6 +86,8 @@ function parseFailOn(value: string): ReviewSeverity {
 
 const store = new ReviewHistoryStore();
 
+const DIFF_WARN_LINES = 2000;
+
 async function runReview(
   diff: string,
   diffSource: string,
@@ -85,12 +95,31 @@ async function runReview(
   outputFile: string | undefined,
   json: boolean,
   failOn: ReviewSeverity | undefined,
-  noSave: boolean
+  noSave: boolean,
+  maxDiffLines?: number
 ): Promise<void> {
+  const diffLines = diff.split("\n").length;
+  let effectiveDiff = diff;
+
+  if (maxDiffLines !== undefined && diffLines > maxDiffLines) {
+    effectiveDiff = diff.split("\n").slice(0, maxDiffLines).join("\n");
+    if (!json) {
+      console.warn(
+        `Warning: diff is ${diffLines} lines — truncated to ${maxDiffLines} (--max-diff-lines). ` +
+          `Results may be incomplete.`
+      );
+    }
+  } else if (diffLines > DIFF_WARN_LINES && !json) {
+    console.warn(
+      `Warning: large diff (${diffLines} lines). Token limits may cause incomplete results. ` +
+        `Use --max-diff-lines <n> to truncate.`
+    );
+  }
+
   if (!json) {
     console.log(`Reviewing ${diffSource} with ${opts.model} via ${opts.provider} (${opts.host})…`);
   }
-  const { summary, comments } = await reviewDiff(diff, diffSource, opts);
+  const { summary, comments } = await reviewDiff(effectiveDiff, diffSource, opts);
 
   const stats = {
     high: comments.filter((c) => c.severity === "high").length,
@@ -155,6 +184,10 @@ const sharedOptions = (cmd: ReturnType<typeof program.command>) =>
     )
     .option("-k, --api-key <key>", "API key (Anthropic; or set ANTHROPIC_API_KEY env var)")
     .option("-t, --max-tokens <number>", "Maximum tokens for the AI response (default: 4096)")
+    .option(
+      "--max-diff-lines <n>",
+      "Truncate diff to N lines before sending to AI (warns when exceeded; avoids token-limit failures)"
+    )
     .option("-o, --output <file>", "Save Markdown report to file")
     .option("--json", "Output review as JSON (suppresses formatted output)")
     .option(
@@ -169,6 +202,7 @@ type SharedOpts = {
   provider: string;
   output?: string;
   maxTokens?: string;
+  maxDiffLines?: string;
   apiKey?: string;
   json?: boolean;
   failOn?: string;
@@ -179,6 +213,8 @@ sharedOptions(program.command("staged").description("Review staged changes (git 
   async (opts: SharedOpts) => {
     const diff = await getStagedDiff().catch(die);
     const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
+    const maxDiffLines =
+      opts.maxDiffLines !== undefined ? parseMaxDiffLines(opts.maxDiffLines) : undefined;
     await runReview(
       diff,
       "staged changes",
@@ -186,7 +222,8 @@ sharedOptions(program.command("staged").description("Review staged changes (git 
       opts.output,
       !!opts.json,
       failOn,
-      !opts.save
+      !opts.save,
+      maxDiffLines
     ).catch(die);
   }
 );
@@ -196,6 +233,8 @@ sharedOptions(
 ).action(async (base: string, opts: SharedOpts) => {
   const diff = await getBranchDiff(base).catch(die);
   const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
+  const maxDiffLines =
+    opts.maxDiffLines !== undefined ? parseMaxDiffLines(opts.maxDiffLines) : undefined;
   await runReview(
     diff,
     `diff vs ${base}`,
@@ -203,7 +242,8 @@ sharedOptions(
     opts.output,
     !!opts.json,
     failOn,
-    !opts.save
+    !opts.save,
+    maxDiffLines
   ).catch(die);
 });
 
@@ -212,6 +252,8 @@ sharedOptions(
 ).action(async (filePath: string, opts: SharedOpts) => {
   const diff = await getFileDiff(filePath).catch(die);
   const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
+  const maxDiffLines =
+    opts.maxDiffLines !== undefined ? parseMaxDiffLines(opts.maxDiffLines) : undefined;
   await runReview(
     diff,
     `file: ${filePath}`,
@@ -219,7 +261,8 @@ sharedOptions(
     opts.output,
     !!opts.json,
     failOn,
-    !opts.save
+    !opts.save,
+    maxDiffLines
   ).catch(die);
 });
 
