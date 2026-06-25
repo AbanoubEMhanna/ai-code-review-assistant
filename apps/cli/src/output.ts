@@ -205,9 +205,10 @@ export interface TrendReport {
 }
 
 export function computeTrend(reviews: StoredReview[], limit: number): TrendReport {
+  const safeLimit = Math.max(1, Math.trunc(limit));
   const sorted = [...reviews]
     .sort((a, b) => a.generatedAt.localeCompare(b.generatedAt))
-    .slice(-limit);
+    .slice(-safeLimit);
 
   const entries: TrendEntry[] = sorted.map((r) => ({
     id: r.id,
