@@ -16,7 +16,8 @@ export interface DoctorReport {
 export function buildDoctorReport(
   configFile: string | null,
   effectiveConfig: { model: string; host: string; provider: string; apiKey?: string },
-  ping: PingResult
+  ping: PingResult,
+  opts: { providerAutoDetected?: boolean } = {}
 ): DoctorReport {
   const checks: DoctorCheck[] = [];
 
@@ -33,6 +34,16 @@ export function buildDoctorReport(
       status: "warn",
       detail: "No .ai-reviewrc.json found — using defaults and env vars",
       suggestion: "Run: ai-review config init",
+    });
+  }
+
+  // ── Auto-detected provider info ────────────────────────────────────────────
+  if (opts.providerAutoDetected) {
+    checks.push({
+      label: "Provider",
+      status: "ok",
+      detail: `Auto-detected "anthropic" from ANTHROPIC_API_KEY (no AI_PROVIDER set)`,
+      suggestion: `Set AI_PROVIDER=anthropic or add "provider": "anthropic" to .ai-reviewrc.json to silence this`,
     });
   }
 

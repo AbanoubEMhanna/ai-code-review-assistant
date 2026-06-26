@@ -16,15 +16,19 @@ import {
 } from "./output.js";
 import type { HistoryStats } from "./output.js";
 import { ReviewHistoryStore } from "./history-store.js";
-import { loadConfig, getConfigFilePath, type AiReviewConfig } from "./config.js";
+import { loadConfig, getConfigFilePath, resolveProvider, type AiReviewConfig } from "./config.js";
 import { buildDoctorReport, formatDoctorReport, formatDoctorJson } from "./doctor.js";
 
 const fileConfig: AiReviewConfig = loadConfig();
 
 const DEFAULT_HOST = process.env["AI_HOST"] ?? fileConfig.host ?? "http://localhost:11434";
-const DEFAULT_PROVIDER = (process.env["AI_PROVIDER"] ??
-  fileConfig.provider ??
-  "ollama") as ReviewOptions["provider"];
+const { provider: DEFAULT_PROVIDER, autoDetected: PROVIDER_AUTO_DETECTED } = resolveProvider({
+  ...(process.env["AI_PROVIDER"] !== undefined ? { envProvider: process.env["AI_PROVIDER"] } : {}),
+  ...(fileConfig.provider !== undefined ? { fileProvider: fileConfig.provider } : {}),
+  ...(process.env["ANTHROPIC_API_KEY"] !== undefined
+    ? { anthropicApiKey: process.env["ANTHROPIC_API_KEY"] }
+    : {}),
+});
 const DEFAULT_MODEL =
   process.env["AI_MODEL"] ??
   fileConfig.model ??
@@ -315,7 +319,9 @@ program
       });
 
       const configFile = getConfigFilePath();
-      const report = buildDoctorReport(configFile, effectiveConfig, ping);
+      const report = buildDoctorReport(configFile, effectiveConfig, ping, {
+        providerAutoDetected: PROVIDER_AUTO_DETECTED,
+      });
 
       if (opts.json) {
         process.stdout.write(formatDoctorJson(report, effectiveConfig));

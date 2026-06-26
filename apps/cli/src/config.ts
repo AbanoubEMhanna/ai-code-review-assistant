@@ -56,3 +56,33 @@ export function getConfigFilePath(): string | null {
   const globalPath = join(homedir(), CONFIG_FILE);
   return existsSync(globalPath) ? globalPath : null;
 }
+
+export interface ProviderResolution {
+  provider: "ollama" | "lmstudio" | "anthropic";
+  autoDetected: boolean;
+}
+
+/**
+ * Resolves the active provider with this priority order:
+ *   AI_PROVIDER env var > config file > auto-detect from ANTHROPIC_API_KEY > "ollama"
+ *
+ * autoDetected=true means the provider was inferred from ANTHROPIC_API_KEY being present,
+ * not from an explicit configuration. Callers (e.g. `doctor`) can surface this to the user.
+ */
+export function resolveProvider(opts: {
+  envProvider?: string;
+  fileProvider?: string;
+  anthropicApiKey?: string;
+}): ProviderResolution {
+  const explicit = opts.envProvider ?? opts.fileProvider;
+  if (explicit) {
+    const p = explicit.trim().toLowerCase();
+    if (p === "ollama" || p === "lmstudio" || p === "anthropic") {
+      return { provider: p, autoDetected: false };
+    }
+  }
+  if (opts.anthropicApiKey) {
+    return { provider: "anthropic", autoDetected: true };
+  }
+  return { provider: "ollama", autoDetected: false };
+}
