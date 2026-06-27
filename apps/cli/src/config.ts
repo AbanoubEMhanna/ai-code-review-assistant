@@ -74,8 +74,8 @@ export function resolveProvider(opts: {
   fileProvider?: string;
   anthropicApiKey?: string;
 }): ProviderResolution {
-  const explicit = opts.envProvider ?? opts.fileProvider;
-  if (explicit) {
+  for (const explicit of [opts.envProvider, opts.fileProvider]) {
+    if (!explicit) continue;
     const p = explicit.trim().toLowerCase();
     if (p === "ollama" || p === "lmstudio" || p === "anthropic") {
       return { provider: p, autoDetected: false };

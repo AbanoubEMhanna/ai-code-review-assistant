@@ -72,4 +72,24 @@ describe("resolveProvider()", () => {
       autoDetected: true,
     });
   });
+
+  it("invalid envProvider falls back to valid fileProvider instead of ignoring it", () => {
+    expect(resolveProvider({ envProvider: "garbage", fileProvider: "anthropic" })).toEqual({
+      provider: "anthropic",
+      autoDetected: false,
+    });
+  });
+
+  it("invalid envProvider falls back to fileProvider before auto-detect", () => {
+    expect(
+      resolveProvider({
+        envProvider: "bad-value",
+        fileProvider: "lmstudio",
+        anthropicApiKey: "sk-ant-xxx",
+      })
+    ).toEqual({
+      provider: "lmstudio",
+      autoDetected: false,
+    });
+  });
 });
