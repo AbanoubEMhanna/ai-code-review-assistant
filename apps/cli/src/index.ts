@@ -3,7 +3,7 @@ import { writeFileSync } from "node:fs";
 import { program } from "commander";
 import { reviewDiff, pingProvider } from "@ai-review/ai";
 import type { ReviewOptions, ReviewReport, ReviewSeverity } from "@ai-review/shared";
-import { getStagedDiff, getBranchDiff, getFileDiff } from "./git.js";
+import { getStagedDiff, getBranchDiff, getFileDiff, getCommitDiff } from "./git.js";
 import {
   printReport,
   printJson,
@@ -215,6 +215,24 @@ sharedOptions(
   await runReview(
     diff,
     `file: ${filePath}`,
+    makeOpts(opts),
+    opts.output,
+    !!opts.json,
+    failOn,
+    !opts.save
+  ).catch(die);
+});
+
+sharedOptions(
+  program
+    .command("commit <hash>")
+    .description("Review the changes introduced by a specific commit (SHA or ref)")
+).action(async (hash: string, opts: SharedOpts) => {
+  const diff = await getCommitDiff(hash).catch(die);
+  const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
+  await runReview(
+    diff,
+    `commit: ${hash}`,
     makeOpts(opts),
     opts.output,
     !!opts.json,
@@ -474,7 +492,14 @@ historyCmd
 historyCmd
   .command("clear")
   .description("Delete all saved reviews")
-  .action(() => {
+  .option("--force", "Skip confirmation prompt (required to actually delete)")
+  .action((opts: { force?: boolean }) => {
+    if (!opts.force) {
+      console.error(
+        "This will permanently delete ALL saved reviews. Re-run with --force to confirm."
+      );
+      process.exit(1);
+    }
     const n = store.clear();
     console.log(`Cleared ${n} review(s) from history.`);
   });
