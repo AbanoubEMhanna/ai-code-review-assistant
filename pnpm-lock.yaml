@@ -24,7 +24,7 @@ importers:
         specifier: ^8.0.0
         version: 8.59.3(eslint@9.39.4)(typescript@6.0.3)
       vite:
-        specifier: ^6.0.0
+        specifier: ^6.4.2
         version: 6.4.3(@types/node@20.19.41)(yaml@2.9.0)
       vitest:
         specifier: ^4.1.0
