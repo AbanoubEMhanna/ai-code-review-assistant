@@ -56,3 +56,10 @@ export function getConfigFilePath(): string | null {
   const globalPath = join(homedir(), CONFIG_FILE);
   return existsSync(globalPath) ? globalPath : null;
 }
+
+export function parseMaxTokensEnv(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  if (!/^\d+$/.test(value.trim())) return undefined;
+  const n = parseInt(value, 10);
+  return n >= 1 ? n : undefined;
+}

@@ -16,7 +16,7 @@ import {
 } from "./output.js";
 import type { HistoryStats } from "./output.js";
 import { ReviewHistoryStore } from "./history-store.js";
-import { loadConfig, getConfigFilePath, type AiReviewConfig } from "./config.js";
+import { loadConfig, getConfigFilePath, parseMaxTokensEnv, type AiReviewConfig } from "./config.js";
 import { buildDoctorReport, formatDoctorReport, formatDoctorJson } from "./doctor.js";
 
 const fileConfig: AiReviewConfig = loadConfig();
@@ -30,6 +30,15 @@ const DEFAULT_MODEL =
   fileConfig.model ??
   (DEFAULT_PROVIDER === "anthropic" ? "claude-sonnet-4-6" : "qwen3:latest");
 const DEFAULT_API_KEY = process.env["ANTHROPIC_API_KEY"];
+
+const _maxTokensEnv = process.env["AI_MAX_TOKENS"];
+if (_maxTokensEnv !== undefined && parseMaxTokensEnv(_maxTokensEnv) === undefined) {
+  process.stderr.write(
+    `Warning: AI_MAX_TOKENS="${_maxTokensEnv}" is not a valid positive integer — ignoring.\n`
+  );
+}
+const DEFAULT_MAX_TOKENS: number | undefined =
+  parseMaxTokensEnv(_maxTokensEnv) ?? fileConfig.maxTokens;
 
 const SEVERITY_RANK: Record<ReviewSeverity, number> = {
   high: 3,
@@ -66,6 +75,8 @@ function makeOpts(cmd: {
       throw new Error(`--max-tokens must be a positive integer, got "${cmd.maxTokens}"`);
     }
     opts.maxTokens = n;
+  } else if (DEFAULT_MAX_TOKENS !== undefined) {
+    opts.maxTokens = DEFAULT_MAX_TOKENS;
   }
   return opts;
 }
@@ -516,7 +527,7 @@ configCmd
       model: DEFAULT_MODEL,
       host: DEFAULT_HOST,
       provider: DEFAULT_PROVIDER,
-      ...(fileConfig.maxTokens !== undefined ? { maxTokens: fileConfig.maxTokens } : {}),
+      ...(DEFAULT_MAX_TOKENS !== undefined ? { maxTokens: DEFAULT_MAX_TOKENS } : {}),
     };
 
     console.log("\nEffective configuration:");
