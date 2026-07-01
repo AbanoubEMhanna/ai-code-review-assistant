@@ -104,6 +104,18 @@ diff --git a/src/utils.ts b/src/utils.ts
     expect(stats.fileCount).toBe(1);
     expect(stats.files).toEqual(["src/my file.ts"]);
   });
+
+  it("handles quoted diff --git headers for paths with special characters", () => {
+    const diff = `diff --git "a/src/weird\\"file.ts" "b/src/weird\\"file.ts"
+--- "a/src/weird\\"file.ts"
++++ "b/src/weird\\"file.ts"
+@@ -1 +1 @@
++x
+`;
+    const stats = getDiffStats(diff);
+    expect(stats.fileCount).toBe(1);
+    expect(stats.files).toEqual(['src/weird\\"file.ts']);
+  });
 });
 
 describe("isLargeDiff", () => {

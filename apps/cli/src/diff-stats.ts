@@ -16,8 +16,10 @@ export function getDiffStats(diff: string): DiffStats {
 
   for (const line of diff.split("\n")) {
     if (line.startsWith("diff --git ")) {
-      const match = line.match(/^diff --git a\/.+ b\/(.+)$/);
-      if (match?.[1]) files.push(match[1]);
+      const quoted = line.match(/^diff --git "a\/(.+)" "b\/(.+)"$/);
+      const unquoted = line.match(/^diff --git a\/(.+) b\/(.+)$/);
+      const file = quoted?.[2] ?? unquoted?.[2];
+      if (file) files.push(file);
     } else if (line.startsWith("+") && !line.startsWith("+++")) {
       linesAdded++;
     } else if (line.startsWith("-") && !line.startsWith("---")) {
