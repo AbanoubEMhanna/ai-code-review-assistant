@@ -76,7 +76,7 @@ ${fn}() {
       if [[ "$prev" == "--shell" || "$prev" == "-s" ]]; then
         COMPREPLY=($(compgen -W "bash zsh fish" -- "$cur"))
       else
-        COMPREPLY=($(compgen -W "--shell" -- "$cur"))
+        COMPREPLY=($(compgen -W "--shell -s" -- "$cur"))
       fi
       ;;
   esac
@@ -187,13 +187,15 @@ ${fn}() {
         shells=('bash' 'zsh' 'fish')
         _describe 'shell' shells
       else
-        _describe 'flag' '(--shell)'
+        local -a completion_flags
+        completion_flags=('--shell[Shell to generate completion for]' '-s[Shell to generate completion for]')
+        _describe 'flag' completion_flags
       fi
       ;;
   esac
 }
 
-${fn} "$@"
+compdef ${fn} ${binName}
 `;
 }
 

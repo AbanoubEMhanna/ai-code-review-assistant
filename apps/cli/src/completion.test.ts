@@ -77,6 +77,11 @@ describe("generateBashCompletion()", () => {
     expect(script).toContain("bash zsh fish");
   });
 
+  it("suggests the -s alias alongside --shell", () => {
+    const script = generateBashCompletion();
+    expect(script).toContain('compgen -W "--shell -s"');
+  });
+
   it("respects custom binName", () => {
     const script = generateBashCompletion("my-review");
     expect(script).toContain("_my_review()");
@@ -111,10 +116,10 @@ describe("generateZshCompletion()", () => {
     expect(generateZshCompletion().startsWith("#compdef ai-review")).toBe(true);
   });
 
-  it("defines and calls the completion function", () => {
+  it("defines and registers the completion function with compdef", () => {
     const script = generateZshCompletion();
     expect(script).toContain("_ai_review()");
-    expect(script).toContain('_ai_review "$@"');
+    expect(script).toContain("compdef _ai_review ai-review");
   });
 
   it("includes all top-level commands with descriptions", () => {
@@ -143,11 +148,16 @@ describe("generateZshCompletion()", () => {
     expect(script).toContain("_describe");
   });
 
+  it("suggests the -s alias alongside --shell", () => {
+    const script = generateZshCompletion();
+    expect(script).toContain("'-s[Shell to generate completion for]'");
+  });
+
   it("respects custom binName", () => {
     const script = generateZshCompletion("my-review");
     expect(script).toContain("#compdef my-review");
     expect(script).toContain("_my_review()");
-    expect(script).toContain('_my_review "$@"');
+    expect(script).toContain("compdef _my_review my-review");
   });
 });
 
