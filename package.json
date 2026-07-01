@@ -19,7 +19,7 @@
     "prettier": "^3.0.0",
     "simple-git-hooks": "^2.0.0",
     "typescript-eslint": "^8.0.0",
-    "vitest": "^2.0.0"
+    "vitest": "^4.1.0"
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm exec lint-staged"
@@ -27,7 +27,10 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "simple-git-hooks"
-    ]
+    ],
+    "overrides": {
+      "vite": "^7.1.0"
+    }
   },
   "lint-staged": {
     "*.{ts,tsx,js,mjs,cjs}": [
