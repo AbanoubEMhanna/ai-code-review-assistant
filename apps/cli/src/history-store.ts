@@ -128,13 +128,16 @@ export class ReviewHistoryStore {
       }
     }
 
-    if (!dryRun) {
-      for (const id of toDelete) {
-        this.delete(id);
-      }
+    if (dryRun) {
+      return { deleted: [...toDelete], kept: all.length - toDelete.size };
     }
 
-    return { deleted: [...toDelete], kept: all.length - toDelete.size };
+    const deleted: string[] = [];
+    for (const id of toDelete) {
+      if (this.delete(id)) deleted.push(id);
+    }
+
+    return { deleted, kept: all.length - deleted.length };
   }
 
   search(query: string, opts: { limit?: number } = {}): StoredReview[] {

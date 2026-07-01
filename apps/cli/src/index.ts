@@ -557,12 +557,11 @@ historyCmd
     }
 
     if (opts.keepLast !== undefined) {
-      const n = parseInt(opts.keepLast, 10);
-      if (isNaN(n) || n < 0) {
+      if (!/^\d+$/.test(opts.keepLast)) {
         console.error(`--keep-last must be a non-negative integer, got "${opts.keepLast}"`);
         process.exit(1);
       }
-      pruneOpts.keepLast = n;
+      pruneOpts.keepLast = parseInt(opts.keepLast, 10);
     }
 
     const result = store.prune(pruneOpts, !!opts.dryRun);
