@@ -60,7 +60,9 @@ export class ReviewHistoryStore {
     }
     if (opts.model !== undefined) {
       const modelFilter = opts.model.toLowerCase();
-      reviews = reviews.filter((r) => r.model.toLowerCase().includes(modelFilter));
+      reviews = reviews.filter(
+        (r) => typeof r.model === "string" && r.model.toLowerCase().includes(modelFilter)
+      );
     }
     if (opts.limit && opts.limit > 0) {
       reviews = reviews.slice(0, opts.limit);
