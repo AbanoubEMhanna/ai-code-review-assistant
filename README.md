@@ -62,6 +62,20 @@ node apps/cli/dist/index.js file src/app.ts
 node apps/cli/dist/index.js staged --output review.md
 ```
 
+### 6. (Optional) Block bad commits with a git hook
+
+```bash
+# Install a pre-commit hook that reviews staged changes and blocks the
+# commit if any issue at or above the given severity is found
+node apps/cli/dist/index.js install-hook --fail-on high
+
+# Skip the check once
+AI_REVIEW_SKIP_HOOK=1 git commit -m "..."
+
+# Remove the hook
+node apps/cli/dist/index.js uninstall-hook
+```
+
 **Options** (all commands):
 
 | Flag             | Default                  | Description                  |
