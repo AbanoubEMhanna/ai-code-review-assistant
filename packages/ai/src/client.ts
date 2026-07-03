@@ -1,6 +1,7 @@
 import type { ReviewComment, ReviewOptions } from "@ai-review/shared";
 import { SYSTEM_PROMPT, buildUserPrompt } from "./prompts.js";
 import { parseReview } from "./parser.js";
+import { redactSecrets } from "./redact.js";
 
 async function fetchWithTimeout(
   url: string,
@@ -107,14 +108,19 @@ export async function reviewDiff(
   diff: string,
   diffSource: string,
   opts: ReviewOptions
-): Promise<{ summary: string; comments: ReviewComment[] }> {
+): Promise<{ summary: string; comments: ReviewComment[]; redactedSecretTypes: string[] }> {
   if (!diff.trim()) {
-    return { summary: "No changes to review.", comments: [] };
+    return { summary: "No changes to review.", comments: [], redactedSecretTypes: [] };
   }
+
+  const shouldRedact = opts.redactSecrets !== false;
+  const { text: safeDiff, found: redactedSecretTypes } = shouldRedact
+    ? redactSecrets(diff)
+    : { text: diff, found: [] as string[] };
 
   const messages = [
     { role: "system", content: SYSTEM_PROMPT },
-    { role: "user", content: buildUserPrompt(diff, diffSource) },
+    { role: "user", content: buildUserPrompt(safeDiff, diffSource) },
   ];
   const maxTokens = opts.maxTokens ?? 4096;
 
@@ -129,7 +135,7 @@ export async function reviewDiff(
       opts.apiKey,
       opts.model,
       SYSTEM_PROMPT,
-      buildUserPrompt(diff, diffSource),
+      buildUserPrompt(safeDiff, diffSource),
       maxTokens
     );
   } else if (opts.provider === "lmstudio") {
@@ -154,5 +160,5 @@ export async function reviewDiff(
     ...(c.suggestion != null ? { suggestion: c.suggestion } : {}),
   }));
 
-  return { summary: parsed.summary, comments };
+  return { summary: parsed.summary, comments, redactedSecretTypes };
 }

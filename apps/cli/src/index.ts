@@ -45,6 +45,7 @@ function makeOpts(cmd: {
   output?: string;
   maxTokens?: string;
   apiKey?: string;
+  redactSecrets?: boolean;
 }): ReviewOptions {
   const provider = cmd.provider.trim().toLowerCase();
   if (provider !== "ollama" && provider !== "lmstudio" && provider !== "anthropic") {
@@ -60,6 +61,7 @@ function makeOpts(cmd: {
   }
   const opts: ReviewOptions = { model: cmd.model, host: cmd.host, provider };
   if (apiKey) opts.apiKey = apiKey;
+  if (cmd.redactSecrets !== undefined) opts.redactSecrets = cmd.redactSecrets;
   if (cmd.maxTokens !== undefined) {
     const n = parseInt(cmd.maxTokens, 10);
     if (isNaN(n) || n < 1) {
@@ -90,7 +92,13 @@ async function runReview(
   if (!json) {
     console.log(`Reviewing ${diffSource} with ${opts.model} via ${opts.provider} (${opts.host})…`);
   }
-  const { summary, comments } = await reviewDiff(diff, diffSource, opts);
+  const { summary, comments, redactedSecretTypes } = await reviewDiff(diff, diffSource, opts);
+
+  if (redactedSecretTypes.length > 0) {
+    console.error(
+      `⚠ Redacted ${redactedSecretTypes.length} type(s) of potential secret from the diff before sending it to ${opts.provider} (${redactedSecretTypes.join(", ")}). Use --no-redact-secrets to disable.`
+    );
+  }
 
   const stats = {
     high: comments.filter((c) => c.severity === "high").length,
@@ -161,7 +169,11 @@ const sharedOptions = (cmd: ReturnType<typeof program.command>) =>
       "--fail-on <severity>",
       "Exit with code 1 if any issue at this severity or above is found (high|medium|low|info)"
     )
-    .option("--no-save", "Do not save this review to history");
+    .option("--no-save", "Do not save this review to history")
+    .option(
+      "--no-redact-secrets",
+      "Do not scrub potential secrets (API keys, tokens, private keys) from the diff before sending it to the AI provider"
+    );
 
 type SharedOpts = {
   model: string;
@@ -173,6 +185,7 @@ type SharedOpts = {
   json?: boolean;
   failOn?: string;
   save: boolean;
+  redactSecrets: boolean;
 };
 
 sharedOptions(program.command("staged").description("Review staged changes (git add)")).action(
