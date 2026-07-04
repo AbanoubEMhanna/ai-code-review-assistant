@@ -132,6 +132,37 @@ describe("parseReview", () => {
     ).toThrow("comments[0].suggestion must be a string or null");
   });
 
+  it("strips a <think>...</think> reasoning trace before parsing", () => {
+    const raw =
+      "<think>\nLet me review this diff... looks like a null check is missing.\n</think>\n" +
+      '{"summary":"ok","comments":[]}';
+    const result = parseReview(raw);
+    expect(result.summary).toBe("ok");
+  });
+
+  it("strips a <think> trace that itself contains braces", () => {
+    const raw =
+      "<think>Should I flag `{ foo: 1 }` as a style nit? Probably not.</think>" +
+      '{"summary":"clean","comments":[]}';
+    const result = parseReview(raw);
+    expect(result.summary).toBe("clean");
+  });
+
+  it("extracts a JSON object surrounded by unfenced preamble/postamble text", () => {
+    const raw =
+      'Sure, here is the review:\n{"summary":"extracted","comments":[]}\nLet me know if you need anything else!';
+    const result = parseReview(raw);
+    expect(result.summary).toBe("extracted");
+  });
+
+  it("extracts JSON with braces inside string values correctly", () => {
+    const raw =
+      'noise before {"summary":"has braces","comments":[{"file":"a.ts","message":"uses `{}` syntax","severity":"low","category":"style"}]} noise after';
+    const result = parseReview(raw);
+    expect(result.summary).toBe("has braces");
+    expect(result.comments[0]?.message).toBe("uses `{}` syntax");
+  });
+
   it("does not include the raw response in parse errors", () => {
     const secret = "SUPER_SECRET_TOKEN=abc123";
     const err = (() => {

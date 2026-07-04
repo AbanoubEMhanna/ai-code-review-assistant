@@ -71,18 +71,71 @@ function assertRawReviewResult(value: unknown): asserts value is RawReviewResult
   }
 }
 
+/**
+ * Finds the first balanced top-level `{...}` object in `text`, respecting
+ * string boundaries so braces inside string values don't throw off the count.
+ * Returns null if no balanced object is found.
+ */
+function extractJsonObject(text: string): string | null {
+  const start = text.indexOf("{");
+  if (start === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (ch === "\\") {
+        escaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+    } else if (ch === "{") {
+      depth++;
+    } else if (ch === "}") {
+      depth--;
+      if (depth === 0) {
+        return text.slice(start, i + 1);
+      }
+    }
+  }
+  return null;
+}
+
 export function parseReview(raw: string): RawReviewResult {
-  const cleaned = raw
+  // Reasoning models (e.g. DeepSeek R1, Qwen3 in thinking mode) often emit a
+  // <think>...</think> trace ahead of the actual answer; strip it before
+  // looking for the JSON payload.
+  const withoutThinking = raw.replace(/<think>[\s\S]*?<\/think>/gi, "");
+  const cleaned = withoutThinking
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/```\s*$/, "")
     .trim();
-  try {
-    const parsed: unknown = JSON.parse(cleaned);
-    assertRawReviewResult(parsed);
-    return parsed;
-  } catch (err) {
-    throw new Error(
-      `Could not parse AI response as JSON. Reason: ${err instanceof Error ? err.message : String(err)} (raw length: ${raw.length})`
-    );
+
+  const candidates = [cleaned];
+  const extracted = extractJsonObject(cleaned);
+  if (extracted != null && extracted !== cleaned) {
+    candidates.push(extracted);
   }
+
+  let lastErr: unknown;
+  for (const candidate of candidates) {
+    try {
+      const parsed: unknown = JSON.parse(candidate);
+      assertRawReviewResult(parsed);
+      return parsed;
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw new Error(
+    `Could not parse AI response as JSON. Reason: ${lastErr instanceof Error ? lastErr.message : String(lastErr)} (raw length: ${raw.length})`
+  );
 }
