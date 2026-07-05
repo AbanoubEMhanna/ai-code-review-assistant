@@ -112,8 +112,10 @@ function extractJsonObject(text: string): string | null {
 export function parseReview(raw: string): RawReviewResult {
   // Reasoning models (e.g. DeepSeek R1, Qwen3 in thinking mode) often emit a
   // <think>...</think> trace ahead of the actual answer; strip it before
-  // looking for the JSON payload.
-  const withoutThinking = raw.replace(/<think>[\s\S]*?<\/think>/gi, "");
+  // looking for the JSON payload. Anchored to the start of the string so a
+  // literal "<think>" appearing inside a valid JSON string value (e.g. a
+  // comment message) is left untouched.
+  const withoutThinking = raw.replace(/^\s*(?:<think>[\s\S]*?<\/think>\s*)+/i, "");
   const cleaned = withoutThinking
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/```\s*$/, "")

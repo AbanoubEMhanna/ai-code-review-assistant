@@ -163,6 +163,22 @@ describe("parseReview", () => {
     expect(result.comments[0]?.message).toBe("uses `{}` syntax");
   });
 
+  it("preserves literal <think> tags inside JSON string values", () => {
+    const raw = JSON.stringify({
+      summary: "ok",
+      comments: [
+        {
+          file: "a.ts",
+          message: "documents <think>literal</think> tags",
+          severity: "low",
+          category: "style",
+        },
+      ],
+    });
+    const result = parseReview(raw);
+    expect(result.comments[0]?.message).toBe("documents <think>literal</think> tags");
+  });
+
   it("does not include the raw response in parse errors", () => {
     const secret = "SUPER_SECRET_TOKEN=abc123";
     const err = (() => {
