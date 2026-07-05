@@ -45,6 +45,14 @@ export function buildDoctorReport(
       suggestion: "Set the ANTHROPIC_API_KEY environment variable or pass --api-key <key>",
     });
   }
+  if (effectiveConfig.provider === "openai" && !effectiveConfig.apiKey) {
+    checks.push({
+      label: "API key",
+      status: "error",
+      detail: "OPENAI_API_KEY is not set",
+      suggestion: "Set the OPENAI_API_KEY environment variable or pass --api-key <key>",
+    });
+  }
 
   // ── Connectivity check ─────────────────────────────────────────────────────
   if (!ping.ok) {
@@ -57,7 +65,9 @@ export function buildDoctorReport(
           ? "Start Ollama: ollama serve"
           : ping.provider === "lmstudio"
             ? "Start the LM Studio local server from the app"
-            : "Check your ANTHROPIC_API_KEY and network connection",
+            : ping.provider === "openai"
+              ? "Check your OPENAI_API_KEY and network connection"
+              : "Check your ANTHROPIC_API_KEY and network connection",
     });
   } else if (!ping.modelFound) {
     const hint =
@@ -149,10 +159,13 @@ export function formatDoctorJson(
 
 export function providerHint(provider: string): string {
   if (provider === "anthropic") return "Anthropic Claude API";
+  if (provider === "openai") return "OpenAI API";
   if (provider === "lmstudio") return "LM Studio";
   return "Ollama";
 }
 
 export function placeholderModel(provider: ReviewOptions["provider"]): string {
-  return provider === "anthropic" ? "claude-sonnet-4-6" : "qwen3:latest";
+  if (provider === "anthropic") return "claude-sonnet-4-6";
+  if (provider === "openai") return "gpt-4o-mini";
+  return "qwen3:latest";
 }
