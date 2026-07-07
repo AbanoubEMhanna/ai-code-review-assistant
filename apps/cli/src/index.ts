@@ -177,50 +177,62 @@ type SharedOpts = {
 
 sharedOptions(program.command("staged").description("Review staged changes (git add)")).action(
   async (opts: SharedOpts) => {
-    const diff = await getStagedDiff().catch(die);
-    const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
-    await runReview(
-      diff,
-      "staged changes",
-      makeOpts(opts),
-      opts.output,
-      !!opts.json,
-      failOn,
-      !opts.save
-    ).catch(die);
+    try {
+      const diff = await getStagedDiff();
+      const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
+      await runReview(
+        diff,
+        "staged changes",
+        makeOpts(opts),
+        opts.output,
+        !!opts.json,
+        failOn,
+        !opts.save
+      );
+    } catch (err) {
+      die(err);
+    }
   }
 );
 
 sharedOptions(
   program.command("branch <base>").description("Review commits on HEAD not in <base>")
 ).action(async (base: string, opts: SharedOpts) => {
-  const diff = await getBranchDiff(base).catch(die);
-  const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
-  await runReview(
-    diff,
-    `diff vs ${base}`,
-    makeOpts(opts),
-    opts.output,
-    !!opts.json,
-    failOn,
-    !opts.save
-  ).catch(die);
+  try {
+    const diff = await getBranchDiff(base);
+    const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
+    await runReview(
+      diff,
+      `diff vs ${base}`,
+      makeOpts(opts),
+      opts.output,
+      !!opts.json,
+      failOn,
+      !opts.save
+    );
+  } catch (err) {
+    die(err);
+  }
 });
 
 sharedOptions(
   program.command("file <path>").description("Review unstaged or staged changes to a specific file")
 ).action(async (filePath: string, opts: SharedOpts) => {
-  const diff = await getFileDiff(filePath).catch(die);
-  const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
-  await runReview(
-    diff,
-    `file: ${filePath}`,
-    makeOpts(opts),
-    opts.output,
-    !!opts.json,
-    failOn,
-    !opts.save
-  ).catch(die);
+  try {
+    const diff = await getFileDiff(filePath);
+    const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
+    await runReview(
+      diff,
+      `file: ${filePath}`,
+      makeOpts(opts),
+      opts.output,
+      !!opts.json,
+      failOn,
+      !opts.save
+    );
+  } catch (err) {
+    die(err);
+  }
 });
 
 // ─── ping command ─────────────────────────────────────────────────────────
