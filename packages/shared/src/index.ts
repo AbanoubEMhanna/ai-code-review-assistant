@@ -22,6 +22,8 @@ export interface ReviewReport {
     info: number;
     total: number;
   };
+  /** sha256 of provider+model+diff, used to skip redundant AI calls for an unchanged diff. */
+  diffHash?: string;
 }
 
 export interface ReviewOptions {

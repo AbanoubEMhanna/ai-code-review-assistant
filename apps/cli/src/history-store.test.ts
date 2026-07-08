@@ -118,3 +118,28 @@ describe("ReviewHistoryStore.search()", () => {
     expect(store.search("anything")).toHaveLength(0);
   });
 });
+
+describe("ReviewHistoryStore.findByHash()", () => {
+  it("returns null when no review matches the hash", () => {
+    store.save(makeReport({ diffHash: "abc123" }));
+    expect(store.findByHash("does-not-exist")).toBeNull();
+  });
+
+  it("returns the review matching the hash", () => {
+    store.save(makeReport({ diffHash: "hash-a" }));
+    const saved = store.save(makeReport({ diffHash: "hash-b" }));
+    const found = store.findByHash("hash-b");
+    expect(found?.id).toBe(saved.id);
+  });
+
+  it("returns the most recent match when several reviews share a hash", () => {
+    store.save(makeReport({ diffHash: "same-hash" }));
+    const newest = store.save(makeReport({ diffHash: "same-hash" }));
+    const found = store.findByHash("same-hash");
+    expect(found?.id).toBe(newest.id);
+  });
+
+  it("returns null when the store is empty", () => {
+    expect(store.findByHash("anything")).toBeNull();
+  });
+});
