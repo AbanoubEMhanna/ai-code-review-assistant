@@ -1,9 +1,7 @@
 import { simpleGit } from "simple-git";
 
-const git = simpleGit();
-
 export async function getStagedDiff(): Promise<string> {
-  const diff = await git.diff(["--cached"]);
+  const diff = await simpleGit().diff(["--cached"]);
   if (!diff.trim()) {
     throw new Error("No staged changes found. Stage some files with `git add` first.");
   }
@@ -11,6 +9,7 @@ export async function getStagedDiff(): Promise<string> {
 }
 
 export async function getBranchDiff(base: string): Promise<string> {
+  const git = simpleGit();
   // Verify the base branch/commit exists
   try {
     await git.revparse([base]);
@@ -25,6 +24,7 @@ export async function getBranchDiff(base: string): Promise<string> {
 }
 
 export async function getFileDiff(filePath: string): Promise<string> {
+  const git = simpleGit();
   const diff = await git.diff(["HEAD", "--", filePath]);
   if (!diff.trim()) {
     // Try staged diff for the file
