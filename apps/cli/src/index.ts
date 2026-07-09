@@ -94,7 +94,15 @@ async function runReview(
 
   let report: ReviewReport;
   if (cached) {
-    report = cached;
+    report = {
+      generatedAt: cached.generatedAt,
+      model: cached.model,
+      diffSource: cached.diffSource,
+      summary: cached.summary,
+      comments: cached.comments,
+      stats: cached.stats,
+      ...(cached.diffHash !== undefined ? { diffHash: cached.diffHash } : {}),
+    };
     if (!json) {
       console.log(
         `Diff unchanged since review ${cached.id} — reusing that result (use --no-cache to force a fresh review).`
