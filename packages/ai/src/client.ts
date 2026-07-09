@@ -21,7 +21,8 @@ async function anthropicChat(
   model: string,
   systemPrompt: string,
   userMessage: string,
-  maxTokens: number
+  maxTokens: number,
+  timeoutMs = 120_000
 ): Promise<string> {
   const res = await fetchWithTimeout(
     "https://api.anthropic.com/v1/messages",
@@ -39,7 +40,7 @@ async function anthropicChat(
         messages: [{ role: "user", content: userMessage }],
       }),
     },
-    120_000
+    timeoutMs
   );
   if (!res.ok) {
     const text = await res.text();
@@ -57,14 +58,19 @@ async function chatCompletions(
   host: string,
   model: string,
   messages: Array<{ role: string; content: string }>,
-  maxTokens: number
+  maxTokens: number,
+  timeoutMs = 60_000
 ): Promise<string> {
   const url = `${host}/v1/chat/completions`;
-  const res = await fetchWithTimeout(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model, messages, max_tokens: maxTokens, stream: false }),
-  });
+  const res = await fetchWithTimeout(
+    url,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model, messages, max_tokens: maxTokens, stream: false }),
+    },
+    timeoutMs
+  );
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`AI request failed (${res.status}): ${text}`);
@@ -81,19 +87,24 @@ async function ollamaChat(
   host: string,
   model: string,
   messages: Array<{ role: string; content: string }>,
-  maxTokens: number
+  maxTokens: number,
+  timeoutMs = 60_000
 ): Promise<string> {
   const url = `${host}/api/chat`;
-  const res = await fetchWithTimeout(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model,
-      messages,
-      stream: false,
-      options: { num_predict: maxTokens },
-    }),
-  });
+  const res = await fetchWithTimeout(
+    url,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model,
+        messages,
+        stream: false,
+        options: { num_predict: maxTokens },
+      }),
+    },
+    timeoutMs
+  );
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Ollama request failed (${res.status}): ${text}`);
@@ -117,6 +128,7 @@ export async function reviewDiff(
     { role: "user", content: buildUserPrompt(diff, diffSource) },
   ];
   const maxTokens = opts.maxTokens ?? 4096;
+  const timeoutMs = opts.timeoutMs;
 
   let raw: string;
   if (opts.provider === "anthropic") {
@@ -130,16 +142,17 @@ export async function reviewDiff(
       opts.model,
       SYSTEM_PROMPT,
       buildUserPrompt(diff, diffSource),
-      maxTokens
+      maxTokens,
+      timeoutMs
     );
   } else if (opts.provider === "lmstudio") {
-    raw = await chatCompletions(opts.host, opts.model, messages, maxTokens);
+    raw = await chatCompletions(opts.host, opts.model, messages, maxTokens, timeoutMs);
   } else {
     try {
-      raw = await ollamaChat(opts.host, opts.model, messages, maxTokens);
+      raw = await ollamaChat(opts.host, opts.model, messages, maxTokens, timeoutMs);
     } catch {
       // Fall back to OpenAI-compatible endpoint (Ollama also supports this)
-      raw = await chatCompletions(opts.host, opts.model, messages, maxTokens);
+      raw = await chatCompletions(opts.host, opts.model, messages, maxTokens, timeoutMs);
     }
   }
 
