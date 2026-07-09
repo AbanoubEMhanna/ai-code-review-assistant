@@ -2,7 +2,12 @@
 import { writeFileSync } from "node:fs";
 import { program } from "commander";
 import { reviewDiff, pingProvider } from "@ai-review/ai";
-import type { ReviewOptions, ReviewReport, ReviewSeverity } from "@ai-review/shared";
+import type {
+  ReviewCategory,
+  ReviewOptions,
+  ReviewReport,
+  ReviewSeverity,
+} from "@ai-review/shared";
 import { getStagedDiff, getBranchDiff, getFileDiff } from "./git.js";
 import {
   printReport,
@@ -38,6 +43,20 @@ const SEVERITY_RANK: Record<ReviewSeverity, number> = {
   info: 0,
 };
 
+const VALID_FOCUS_CATEGORIES: ReviewCategory[] = [
+  "bug",
+  "security",
+  "performance",
+  "maintainability",
+  "style",
+];
+
+function parseFocus(value: string): ReviewCategory {
+  const v = value.trim().toLowerCase() as ReviewCategory;
+  if (VALID_FOCUS_CATEGORIES.includes(v)) return v;
+  throw new Error(`--focus must be one of: ${VALID_FOCUS_CATEGORIES.join(", ")}. Got "${value}"`);
+}
+
 function makeOpts(cmd: {
   model: string;
   host: string;
@@ -45,6 +64,7 @@ function makeOpts(cmd: {
   output?: string;
   maxTokens?: string;
   apiKey?: string;
+  focus?: string;
 }): ReviewOptions {
   const provider = cmd.provider.trim().toLowerCase();
   if (provider !== "ollama" && provider !== "lmstudio" && provider !== "anthropic") {
@@ -67,6 +87,9 @@ function makeOpts(cmd: {
     }
     opts.maxTokens = n;
   }
+  if (cmd.focus !== undefined) {
+    opts.focus = parseFocus(cmd.focus);
+  }
   return opts;
 }
 
@@ -88,7 +111,10 @@ async function runReview(
   noSave: boolean
 ): Promise<void> {
   if (!json) {
-    console.log(`Reviewing ${diffSource} with ${opts.model} via ${opts.provider} (${opts.host})…`);
+    const focusLabel = opts.focus ? ` [focus: ${opts.focus}]` : "";
+    console.log(
+      `Reviewing ${diffSource} with ${opts.model} via ${opts.provider} (${opts.host})${focusLabel}…`
+    );
   }
   const { summary, comments } = await reviewDiff(diff, diffSource, opts);
 
@@ -161,6 +187,10 @@ const sharedOptions = (cmd: ReturnType<typeof program.command>) =>
       "--fail-on <severity>",
       "Exit with code 1 if any issue at this severity or above is found (high|medium|low|info)"
     )
+    .option(
+      "--focus <category>",
+      "Focus the AI review on a specific category (bug|security|performance|maintainability|style)"
+    )
     .option("--no-save", "Do not save this review to history");
 
 type SharedOpts = {
@@ -172,6 +202,7 @@ type SharedOpts = {
   apiKey?: string;
   json?: boolean;
   failOn?: string;
+  focus?: string;
   save: boolean;
 };
 
