@@ -117,4 +117,52 @@ describe("ReviewHistoryStore.search()", () => {
   it("returns empty when store is empty", () => {
     expect(store.search("anything")).toHaveLength(0);
   });
+
+  it("matches on note text", () => {
+    const r = store.save(makeReport({ summary: "looks good" }));
+    store.setNote(r.id, "followup needed after auth refactor");
+    store.save(makeReport({ summary: "another review" }));
+    const results = store.search("auth refactor");
+    expect(results).toHaveLength(1);
+    expect(results[0]?.note).toBe("followup needed after auth refactor");
+  });
+});
+
+describe("ReviewHistoryStore.setNote()", () => {
+  it("sets a note on an existing review", () => {
+    const saved = store.save(makeReport());
+    const ok = store.setNote(saved.id, "needs follow-up");
+    expect(ok).toBe(true);
+    const loaded = store.get(saved.id);
+    expect(loaded?.note).toBe("needs follow-up");
+  });
+
+  it("updates an existing note", () => {
+    const saved = store.save(makeReport());
+    store.setNote(saved.id, "first note");
+    store.setNote(saved.id, "updated note");
+    const loaded = store.get(saved.id);
+    expect(loaded?.note).toBe("updated note");
+  });
+
+  it("clears a note when null is passed", () => {
+    const saved = store.save(makeReport());
+    store.setNote(saved.id, "temporary note");
+    store.setNote(saved.id, null);
+    const loaded = store.get(saved.id);
+    expect(loaded?.note).toBeUndefined();
+  });
+
+  it("returns false for a non-existent id", () => {
+    const ok = store.setNote("99999999-zzzzzz", null);
+    expect(ok).toBe(false);
+  });
+
+  it("persists the note across store instances", () => {
+    const saved = store.save(makeReport());
+    store.setNote(saved.id, "persistent note");
+    const store2 = new ReviewHistoryStore(dir);
+    const loaded = store2.get(saved.id);
+    expect(loaded?.note).toBe("persistent note");
+  });
 });
