@@ -2,6 +2,25 @@ import type { ReviewComment, ReviewOptions } from "@ai-review/shared";
 import { SYSTEM_PROMPT, buildUserPrompt } from "./prompts.js";
 import { parseReview } from "./parser.js";
 
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  retries: number,
+  delay: (ms: number) => Promise<void> = sleep
+): Promise<T> {
+  let attempt = 0;
+  for (;;) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (attempt >= retries) throw err;
+      await delay(1000 * Math.pow(2, attempt));
+      attempt++;
+    }
+  }
+}
+
 async function fetchWithTimeout(
   url: string,
   init: RequestInit,
@@ -117,6 +136,7 @@ export async function reviewDiff(
     { role: "user", content: buildUserPrompt(diff, diffSource) },
   ];
   const maxTokens = opts.maxTokens ?? 4096;
+  const retries = opts.retries ?? 0;
 
   let raw: string;
   if (opts.provider === "anthropic") {
@@ -125,22 +145,26 @@ export async function reviewDiff(
         "Anthropic provider requires an API key. Set ANTHROPIC_API_KEY or use --api-key."
       );
     }
-    raw = await anthropicChat(
-      opts.apiKey,
-      opts.model,
-      SYSTEM_PROMPT,
-      buildUserPrompt(diff, diffSource),
-      maxTokens
+    const key = opts.apiKey;
+    raw = await withRetry(
+      () =>
+        anthropicChat(key, opts.model, SYSTEM_PROMPT, buildUserPrompt(diff, diffSource), maxTokens),
+      retries
     );
   } else if (opts.provider === "lmstudio") {
-    raw = await chatCompletions(opts.host, opts.model, messages, maxTokens);
+    raw = await withRetry(
+      () => chatCompletions(opts.host, opts.model, messages, maxTokens),
+      retries
+    );
   } else {
-    try {
-      raw = await ollamaChat(opts.host, opts.model, messages, maxTokens);
-    } catch {
-      // Fall back to OpenAI-compatible endpoint (Ollama also supports this)
-      raw = await chatCompletions(opts.host, opts.model, messages, maxTokens);
-    }
+    raw = await withRetry(async () => {
+      try {
+        return await ollamaChat(opts.host, opts.model, messages, maxTokens);
+      } catch {
+        // Fall back to OpenAI-compatible endpoint (Ollama also supports this)
+        return chatCompletions(opts.host, opts.model, messages, maxTokens);
+      }
+    }, retries);
   }
 
   const parsed = parseReview(raw);
