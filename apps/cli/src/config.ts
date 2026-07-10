@@ -7,6 +7,7 @@ export interface AiReviewConfig {
   host?: string;
   provider?: string;
   maxTokens?: number;
+  ignore?: string[];
 }
 
 const CONFIG_FILE = ".ai-reviewrc.json";
@@ -34,6 +35,9 @@ function readConfigFile(filePath: string): AiReviewConfig {
     if (typeof obj["host"] === "string") cfg.host = obj["host"];
     if (typeof obj["provider"] === "string") cfg.provider = obj["provider"];
     if (typeof obj["maxTokens"] === "number") cfg.maxTokens = obj["maxTokens"];
+    if (Array.isArray(obj["ignore"]) && obj["ignore"].every((p) => typeof p === "string")) {
+      cfg.ignore = obj["ignore"] as string[];
+    }
     return cfg;
   } catch {
     return {};
