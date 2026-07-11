@@ -194,6 +194,20 @@ export function printHistoryStatsJson(stats: HistoryStats): void {
   process.stdout.write(JSON.stringify(stats, null, 2) + "\n");
 }
 
+export interface ConfigJsonOutput {
+  config: {
+    model: string;
+    host: string;
+    provider: string;
+    maxTokens?: number;
+  };
+  configFile: string | null;
+}
+
+export function printConfigJson(output: ConfigJsonOutput): void {
+  process.stdout.write(JSON.stringify(output, null, 2) + "\n");
+}
+
 export interface HistoryStats {
   reviewCount: number;
   totalIssues: number;

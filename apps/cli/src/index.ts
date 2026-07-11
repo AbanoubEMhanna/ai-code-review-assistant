@@ -11,6 +11,7 @@ import {
   printHistoryStats,
   printHistoryListJson,
   printHistoryStatsJson,
+  printConfigJson,
   printPingResult,
   saveMarkdown,
 } from "./output.js";
@@ -483,9 +484,14 @@ historyCmd
   .command("search <query>")
   .description("Search saved reviews by keyword (searches summary, source, model, and comments)")
   .option("-n, --limit <number>", "Maximum results to show", "20")
-  .action((query: string, opts: { limit: string }) => {
+  .option("--json", "Output as JSON array")
+  .action((query: string, opts: { limit: string; json?: boolean }) => {
     const limit = parseInt(opts.limit, 10);
     const results = store.search(query, { limit: isNaN(limit) ? 20 : limit });
+    if (opts.json) {
+      printHistoryListJson(results);
+      return;
+    }
     if (results.length === 0) {
       console.log(`No reviews matching "${query}".`);
       return;
@@ -510,7 +516,8 @@ const configCmd = program.command("config").description("Manage ai-review config
 configCmd
   .command("show")
   .description("Show the active configuration and its source")
-  .action(() => {
+  .option("--json", "Output as JSON")
+  .action((opts: { json?: boolean }) => {
     const configPath = getConfigFilePath();
     const effective = {
       model: DEFAULT_MODEL,
@@ -518,6 +525,11 @@ configCmd
       provider: DEFAULT_PROVIDER,
       ...(fileConfig.maxTokens !== undefined ? { maxTokens: fileConfig.maxTokens } : {}),
     };
+
+    if (opts.json) {
+      printConfigJson({ config: effective, configFile: configPath });
+      return;
+    }
 
     console.log("\nEffective configuration:");
     console.log(JSON.stringify(effective, null, 2));
