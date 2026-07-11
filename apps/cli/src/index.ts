@@ -18,6 +18,7 @@ import type { HistoryStats } from "./output.js";
 import { ReviewHistoryStore } from "./history-store.js";
 import { loadConfig, getConfigFilePath, type AiReviewConfig } from "./config.js";
 import { buildDoctorReport, formatDoctorReport, formatDoctorJson } from "./doctor.js";
+import { resolveHooksDir, installPreCommitHook, uninstallPreCommitHook } from "./git-hooks.js";
 
 const fileConfig: AiReviewConfig = loadConfig();
 
@@ -326,6 +327,53 @@ program
       if (!report.ok) process.exit(1);
     }
   );
+
+// ─── git hook commands ─────────────────────────────────────────────────────
+
+program
+  .command("install-hook")
+  .description("Install a pre-commit hook that blocks commits with issues at or above a severity")
+  .option(
+    "--fail-on <severity>",
+    "Severity threshold that blocks the commit (high|medium|low|info)",
+    "high"
+  )
+  .option("--force", "Back up and replace an existing pre-commit hook not managed by ai-review")
+  .action(async (opts: { failOn: string; force?: boolean }) => {
+    const failOn = parseFailOn(opts.failOn);
+    try {
+      const hooksDir = await resolveHooksDir();
+      const result = installPreCommitHook(hooksDir, failOn, !!opts.force);
+      console.log(`Installed pre-commit hook at ${result.hookPath}`);
+      if (result.backedUpTo) {
+        console.log(`Existing hook backed up to ${result.backedUpTo}`);
+      }
+      console.log(`Commits will be blocked when review issues reach "${failOn}" severity.`);
+      console.log(`Bypass once with: AI_REVIEW_SKIP_HOOK=1 git commit ...`);
+    } catch (err) {
+      die(err);
+    }
+  });
+
+program
+  .command("uninstall-hook")
+  .description("Remove the ai-review pre-commit hook")
+  .action(async () => {
+    try {
+      const hooksDir = await resolveHooksDir();
+      const result = uninstallPreCommitHook(hooksDir);
+      if (!result.removed) {
+        console.log(result.reason ?? "No hook removed.");
+        return;
+      }
+      console.log("Removed ai-review pre-commit hook.");
+      if (result.restoredFrom) {
+        console.log(`Restored previous hook from ${result.restoredFrom}`);
+      }
+    } catch (err) {
+      die(err);
+    }
+  });
 
 // ─── history subcommand group ──────────────────────────────────────────────
 
