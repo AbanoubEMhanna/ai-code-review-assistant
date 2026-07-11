@@ -13,6 +13,9 @@ import {
   printHistoryStatsJson,
   printPingResult,
   saveMarkdown,
+  computeTopFiles,
+  printTopFiles,
+  printTopFilesJson,
 } from "./output.js";
 import type { HistoryStats } from "./output.js";
 import { ReviewHistoryStore } from "./history-store.js";
@@ -500,6 +503,27 @@ historyCmd
             ? `🟡 ${r.stats.medium}M`
             : "✅";
       console.log(`${r.id}  ${badge}  ${r.diffSource}  (${r.model}, ${date})`);
+    }
+  });
+
+historyCmd
+  .command("top-files")
+  .description("Show files with the most review issues across history")
+  .option("-n, --limit <number>", "Number of files to show", "10")
+  .option("--json", "Output as JSON array")
+  .action((opts: { limit: string; json?: boolean }) => {
+    const rawLimit = opts.limit.trim();
+    if (!/^[1-9]\d*$/.test(rawLimit)) {
+      console.error(`Invalid --limit "${opts.limit}". Use a positive integer.`);
+      process.exit(1);
+    }
+    const limit = Number(rawLimit);
+    const reviews = store.list();
+    const entries = computeTopFiles(reviews, limit);
+    if (opts.json) {
+      printTopFilesJson(entries);
+    } else {
+      printTopFiles(entries);
     }
   });
 

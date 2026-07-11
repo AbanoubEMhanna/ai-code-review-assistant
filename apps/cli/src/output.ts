@@ -203,6 +203,66 @@ export interface HistoryStats {
   avgIssuesPerReview: number;
 }
 
+export interface FileIssueStat {
+  file: string;
+  total: number;
+  high: number;
+  medium: number;
+  low: number;
+  info: number;
+}
+
+export function computeTopFiles(reviews: StoredReview[], limit: number): FileIssueStat[] {
+  const counts = new Map<string, FileIssueStat>();
+
+  for (const r of reviews) {
+    for (const c of r.comments) {
+      let entry = counts.get(c.file);
+      if (!entry) {
+        entry = { file: c.file, total: 0, high: 0, medium: 0, low: 0, info: 0 };
+        counts.set(c.file, entry);
+      }
+      entry.total++;
+      entry[c.severity]++;
+    }
+  }
+
+  return [...counts.values()]
+    .sort((a, b) => b.total - a.total || a.file.localeCompare(b.file))
+    .slice(0, limit);
+}
+
+export function printTopFilesJson(entries: FileIssueStat[]): void {
+  process.stdout.write(JSON.stringify(entries, null, 2) + "\n");
+}
+
+export function printTopFiles(entries: FileIssueStat[]): void {
+  if (entries.length === 0) {
+    console.log("No review history with file-level comments found.");
+    return;
+  }
+
+  console.log("\n" + chalk.bold.underline("Top Files by Issue Count"));
+
+  const maxLen = Math.min(Math.max(...entries.map((e) => e.file.length)), 60);
+
+  for (const e of entries) {
+    const display = e.file.length > 60 ? `…${e.file.slice(-59)}` : e.file;
+    const filePart = display.padEnd(maxLen + 2);
+    const totalPart = chalk.bold(String(e.total).padStart(3));
+    const parts: string[] = [];
+    if (e.high > 0) parts.push(chalk.red.bold(`${e.high}H`));
+    if (e.medium > 0) parts.push(chalk.yellow.bold(`${e.medium}M`));
+    if (e.low > 0) parts.push(chalk.cyan(`${e.low}L`));
+    if (e.info > 0) parts.push(chalk.gray(`${e.info}I`));
+    const detail =
+      parts.length > 0 ? chalk.dim(" (") + parts.join(chalk.dim(", ")) + chalk.dim(")") : "";
+    const label = e.total === 1 ? "issue" : "issues";
+    console.log(`  ${filePart}  ${totalPart} ${label}${detail}`);
+  }
+  console.log();
+}
+
 export function printHistoryStats(stats: HistoryStats): void {
   console.log("\n" + chalk.bold.underline("Review History Stats"));
   console.log(
