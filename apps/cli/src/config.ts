@@ -24,20 +24,54 @@ function findProjectConfig(startDir: string): string | null {
 }
 
 function readConfigFile(filePath: string): AiReviewConfig {
+  let raw: string;
   try {
-    const raw = readFileSync(filePath, "utf8");
-    const parsed = JSON.parse(raw) as unknown;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
-    const obj = parsed as Record<string, unknown>;
-    const cfg: AiReviewConfig = {};
-    if (typeof obj["model"] === "string") cfg.model = obj["model"];
-    if (typeof obj["host"] === "string") cfg.host = obj["host"];
-    if (typeof obj["provider"] === "string") cfg.provider = obj["provider"];
-    if (typeof obj["maxTokens"] === "number") cfg.maxTokens = obj["maxTokens"];
-    return cfg;
-  } catch {
+    raw = readFileSync(filePath, "utf8");
+  } catch (err) {
+    console.error(
+      `⚠ Could not read config file ${filePath}: ${err instanceof Error ? err.message : String(err)}. Using defaults.`
+    );
     return {};
   }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    console.error(
+      `⚠ Config file ${filePath} is not valid JSON (${err instanceof Error ? err.message : String(err)}). Ignoring it and using defaults.`
+    );
+    return {};
+  }
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    console.error(
+      `⚠ Config file ${filePath} must contain a JSON object. Ignoring it and using defaults.`
+    );
+    return {};
+  }
+
+  const obj = parsed as Record<string, unknown>;
+  const cfg: AiReviewConfig = {};
+
+  if (obj["model"] !== undefined) {
+    if (typeof obj["model"] === "string") cfg.model = obj["model"];
+    else console.error(`⚠ Config file ${filePath}: "model" must be a string, ignoring it.`);
+  }
+  if (obj["host"] !== undefined) {
+    if (typeof obj["host"] === "string") cfg.host = obj["host"];
+    else console.error(`⚠ Config file ${filePath}: "host" must be a string, ignoring it.`);
+  }
+  if (obj["provider"] !== undefined) {
+    if (typeof obj["provider"] === "string") cfg.provider = obj["provider"];
+    else console.error(`⚠ Config file ${filePath}: "provider" must be a string, ignoring it.`);
+  }
+  if (obj["maxTokens"] !== undefined) {
+    if (typeof obj["maxTokens"] === "number") cfg.maxTokens = obj["maxTokens"];
+    else console.error(`⚠ Config file ${filePath}: "maxTokens" must be a number, ignoring it.`);
+  }
+
+  return cfg;
 }
 
 export function loadConfig(): AiReviewConfig {
