@@ -186,6 +186,148 @@ export function printPingJson(result: PingResult): void {
   process.stdout.write(JSON.stringify(result, null, 2) + "\n");
 }
 
+export interface TrendEntry {
+  id: string;
+  date: string;
+  diffSource: string;
+  model: string;
+  total: number;
+  high: number;
+  medium: number;
+  low: number;
+  info: number;
+}
+
+export interface TrendReport {
+  entries: TrendEntry[];
+  direction: "improving" | "degrading" | "stable";
+  slope: number;
+}
+
+export function computeTrend(reviews: StoredReview[], limit: number): TrendReport {
+  const safeLimit = Math.max(1, Math.trunc(limit));
+  const sorted = [...reviews]
+    .sort((a, b) => a.generatedAt.localeCompare(b.generatedAt))
+    .slice(-safeLimit);
+
+  const entries: TrendEntry[] = sorted.map((r) => ({
+    id: r.id,
+    date: r.generatedAt,
+    diffSource: r.diffSource,
+    model: r.model,
+    total: r.stats.total,
+    high: r.stats.high,
+    medium: r.stats.medium,
+    low: r.stats.low,
+    info: r.stats.info,
+  }));
+
+  const n = entries.length;
+  let slope = 0;
+  if (n >= 2) {
+    const totals = entries.map((e) => e.total);
+    const xMean = (n - 1) / 2;
+    const yMean = totals.reduce((a, b) => a + b, 0) / n;
+    const num = totals.reduce((s, y, i) => s + (i - xMean) * (y - yMean), 0);
+    const den = totals.reduce((s, _, i) => s + (i - xMean) ** 2, 0);
+    slope = den === 0 ? 0 : num / den;
+  }
+
+  const THRESHOLD = 0.1;
+  const direction = slope < -THRESHOLD ? "improving" : slope > THRESHOLD ? "degrading" : "stable";
+
+  return { entries, direction, slope };
+}
+
+function formatTrendDate(iso: string): string {
+  const d = new Date(iso);
+  const months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
+  const month = months[d.getMonth()] ?? "?";
+  const day = String(d.getDate()).padStart(2, "0");
+  const hour = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  return `${month} ${day} ${hour}:${min}`;
+}
+
+export function printTrend(trend: TrendReport): void {
+  const { entries, direction, slope } = trend;
+  const count = entries.length;
+
+  console.log(
+    "\n" +
+      chalk.bold.underline("Review Quality Trend") +
+      chalk.dim(`  (${count} review${count === 1 ? "" : "s"})`)
+  );
+
+  if (count === 0) {
+    console.log("  No saved reviews.\n");
+    return;
+  }
+
+  const maxTotal = Math.max(...entries.map((e) => e.total), 1);
+  const BAR_MAX = 20;
+
+  console.log();
+  console.log(chalk.dim("  Date          Source                         Total   H   M   L   I"));
+  console.log(chalk.dim("  " + "─".repeat(68)));
+
+  for (const e of entries) {
+    const dateStr = formatTrendDate(e.date);
+    const src = e.diffSource.length > 30 ? "…" + e.diffSource.slice(-29) : e.diffSource;
+    const barLen = e.total === 0 ? 0 : Math.max(1, Math.round((e.total / maxTotal) * BAR_MAX));
+    const bar =
+      e.total === 0
+        ? chalk.dim("·")
+        : e.high > 0
+          ? chalk.red("█".repeat(barLen))
+          : e.medium > 0
+            ? chalk.yellow("█".repeat(barLen))
+            : chalk.cyan("█".repeat(barLen));
+
+    const totalStr = String(e.total).padStart(5);
+    const hStr = chalk.red(String(e.high).padStart(4));
+    const mStr = chalk.yellow(String(e.medium).padStart(4));
+    const lStr = chalk.cyan(String(e.low).padStart(4));
+    const iStr = chalk.gray(String(e.info).padStart(4));
+
+    console.log(
+      `  ${dateStr.padEnd(13)}  ${src.padEnd(30)}  ${totalStr}${hStr}${mStr}${lStr}${iStr}  ${bar}`
+    );
+  }
+
+  console.log();
+
+  if (count < 2) {
+    console.log(chalk.dim("  Need at least 2 reviews for trend analysis.\n"));
+    return;
+  }
+
+  const dirColor =
+    direction === "improving" ? chalk.green : direction === "degrading" ? chalk.red : chalk.yellow;
+  const dirSymbol = direction === "improving" ? "↓" : direction === "degrading" ? "↑" : "→";
+
+  console.log(
+    `  Trend: ${dirColor.bold(`${direction} (${dirSymbol} ${Math.abs(slope).toFixed(1)} issues/review)`)}\n`
+  );
+}
+
+export function printTrendJson(trend: TrendReport): void {
+  process.stdout.write(JSON.stringify(trend, null, 2) + "\n");
+}
+
 export function printHistoryListJson(reviews: StoredReview[]): void {
   process.stdout.write(JSON.stringify(reviews, null, 2) + "\n");
 }

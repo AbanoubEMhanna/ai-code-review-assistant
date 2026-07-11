@@ -13,6 +13,9 @@ import {
   printHistoryStatsJson,
   printPingResult,
   saveMarkdown,
+  computeTrend,
+  printTrend,
+  printTrendJson,
 } from "./output.js";
 import type { HistoryStats } from "./output.js";
 import { ReviewHistoryStore } from "./history-store.js";
@@ -500,6 +503,26 @@ historyCmd
             ? `🟡 ${r.stats.medium}M`
             : "✅";
       console.log(`${r.id}  ${badge}  ${r.diffSource}  (${r.model}, ${date})`);
+    }
+  });
+
+historyCmd
+  .command("trend")
+  .description("Show how issue counts have trended across recent reviews")
+  .option("-n, --last <number>", "Number of recent reviews to include", "10")
+  .option("--json", "Output as JSON")
+  .action((opts: { last: string; json?: boolean }) => {
+    const limit = parseInt(opts.last, 10);
+    if (isNaN(limit) || limit < 1) {
+      console.error(`Invalid --last "${opts.last}". Use a positive integer.`);
+      process.exit(1);
+    }
+    const reviews = store.list();
+    const trend = computeTrend(reviews, limit);
+    if (opts.json) {
+      printTrendJson(trend);
+    } else {
+      printTrend(trend);
     }
   });
 
