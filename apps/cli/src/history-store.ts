@@ -7,6 +7,16 @@ export interface StoredReview extends ReviewReport {
   id: string;
 }
 
+export interface PruneOptions {
+  olderThanMs?: number;
+  keepLast?: number;
+}
+
+export interface PruneResult {
+  deleted: string[];
+  kept: number;
+}
+
 const DEFAULT_DIR = join(homedir(), ".ai-review", "history");
 
 function isValidId(id: string): boolean {
@@ -91,6 +101,43 @@ export class ReviewHistoryStore {
       }
     }
     return count;
+  }
+
+  prune(opts: PruneOptions, dryRun = false): PruneResult {
+    const all = this.list();
+
+    // Sort by generatedAt descending so keepLast keeps the most recently *generated* reviews.
+    const byGenerated = [...all].sort(
+      (a, b) => new Date(b.generatedAt).getTime() - new Date(a.generatedAt).getTime()
+    );
+
+    const toDelete = new Set<string>();
+
+    if (opts.keepLast !== undefined && byGenerated.length > opts.keepLast) {
+      for (const r of byGenerated.slice(opts.keepLast)) {
+        toDelete.add(r.id);
+      }
+    }
+
+    if (opts.olderThanMs !== undefined) {
+      const cutoff = Date.now() - opts.olderThanMs;
+      for (const r of all) {
+        if (new Date(r.generatedAt).getTime() < cutoff) {
+          toDelete.add(r.id);
+        }
+      }
+    }
+
+    if (dryRun) {
+      return { deleted: [...toDelete], kept: all.length - toDelete.size };
+    }
+
+    const deleted: string[] = [];
+    for (const id of toDelete) {
+      if (this.delete(id)) deleted.push(id);
+    }
+
+    return { deleted, kept: all.length - deleted.length };
   }
 
   search(query: string, opts: { limit?: number } = {}): StoredReview[] {

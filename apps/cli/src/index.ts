@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { writeFileSync } from "node:fs";
 import { program } from "commander";
+import chalk from "chalk";
 import { reviewDiff, pingProvider } from "@ai-review/ai";
 import type { ReviewOptions, ReviewReport, ReviewSeverity } from "@ai-review/shared";
 import { getStagedDiff, getBranchDiff, getFileDiff } from "./git.js";
@@ -16,6 +17,7 @@ import {
 } from "./output.js";
 import type { HistoryStats } from "./output.js";
 import { ReviewHistoryStore } from "./history-store.js";
+import type { PruneOptions } from "./history-store.js";
 import { loadConfig, getConfigFilePath, type AiReviewConfig } from "./config.js";
 import { buildDoctorReport, formatDoctorReport, formatDoctorJson } from "./doctor.js";
 
@@ -500,6 +502,89 @@ historyCmd
             ? `🟡 ${r.stats.medium}M`
             : "✅";
       console.log(`${r.id}  ${badge}  ${r.diffSource}  (${r.model}, ${date})`);
+    }
+  });
+
+// ─── history prune ────────────────────────────────────────────────────────────
+
+function parseDuration(value: string): number {
+  const m = /^(\d+)(d|w|mo|y)$/i.exec(value.trim());
+  if (!m) {
+    throw new Error(
+      `Invalid duration "${value}". Use a number followed by d (days), w (weeks), mo (months), or y (years). Examples: 7d, 2w, 1mo, 1y`
+    );
+  }
+  const n = parseInt(m[1] ?? "", 10);
+  const unit = (m[2] ?? "").toLowerCase();
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  if (unit === "d") return n * DAY_MS;
+  if (unit === "w") return n * 7 * DAY_MS;
+  if (unit === "mo") return n * 30 * DAY_MS;
+  return n * 365 * DAY_MS; // y
+}
+
+historyCmd
+  .command("prune")
+  .description("Delete old reviews to keep history manageable")
+  .option(
+    "--older-than <duration>",
+    "Delete reviews older than this duration (e.g. 7d, 2w, 1mo, 1y)"
+  )
+  .option("--keep-last <number>", "Keep only the N most recent reviews, deleting the rest")
+  .option("--dry-run", "Preview what would be deleted without actually deleting")
+  .option("--json", "Output result as JSON")
+  .action((opts: { olderThan?: string; keepLast?: string; dryRun?: boolean; json?: boolean }) => {
+    if (!opts.olderThan && !opts.keepLast) {
+      console.error(
+        "Error: provide at least one of --older-than or --keep-last.\n" +
+          "Examples:\n" +
+          "  ai-review history prune --older-than 30d\n" +
+          "  ai-review history prune --keep-last 50\n" +
+          "  ai-review history prune --older-than 7d --keep-last 20 --dry-run"
+      );
+      process.exit(1);
+    }
+
+    const pruneOpts: PruneOptions = {};
+
+    if (opts.olderThan) {
+      try {
+        pruneOpts.olderThanMs = parseDuration(opts.olderThan);
+      } catch (e) {
+        console.error((e as Error).message);
+        process.exit(1);
+      }
+    }
+
+    if (opts.keepLast !== undefined) {
+      if (!/^\d+$/.test(opts.keepLast)) {
+        console.error(`--keep-last must be a non-negative integer, got "${opts.keepLast}"`);
+        process.exit(1);
+      }
+      pruneOpts.keepLast = parseInt(opts.keepLast, 10);
+    }
+
+    const result = store.prune(pruneOpts, !!opts.dryRun);
+
+    if (opts.json) {
+      process.stdout.write(
+        JSON.stringify(
+          { dryRun: !!opts.dryRun, deleted: result.deleted.length, kept: result.kept },
+          null,
+          2
+        ) + "\n"
+      );
+      return;
+    }
+
+    const prefix = opts.dryRun ? chalk.dim("[dry-run] ") : "";
+    if (result.deleted.length === 0) {
+      console.log(`${prefix}Nothing to prune — ${result.kept} review(s) kept.`);
+    } else {
+      const action = opts.dryRun ? "Would delete" : "Deleted";
+      console.log(
+        `${prefix}${action} ${chalk.bold(String(result.deleted.length))} review(s), ${result.kept} kept.`
+      );
     }
   });
 
