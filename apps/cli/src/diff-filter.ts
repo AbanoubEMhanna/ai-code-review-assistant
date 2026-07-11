@@ -44,8 +44,9 @@ function globToRegExp(pattern: string): RegExp {
 export function matchesIgnorePattern(filePath: string, pattern: string): boolean {
   const p = pattern.trim();
   if (!p) return false;
-  const normalized = p.startsWith("/") ? p.slice(1) : p;
-  if (normalized.includes("/")) {
+  const hasLeadingSlash = p.startsWith("/");
+  const normalized = hasLeadingSlash ? p.slice(1) : p;
+  if (hasLeadingSlash || normalized.includes("/")) {
     return globToRegExp(normalized).test(filePath);
   }
   const basename = filePath.split("/").pop() ?? filePath;

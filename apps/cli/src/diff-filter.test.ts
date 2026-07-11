@@ -35,6 +35,7 @@ describe("matchesIgnorePattern()", () => {
 
   it("treats a leading slash as project-root anchored", () => {
     expect(matchesIgnorePattern("pnpm-lock.yaml", "/pnpm-lock.yaml")).toBe(true);
+    expect(matchesIgnorePattern("nested/pnpm-lock.yaml", "/pnpm-lock.yaml")).toBe(false);
   });
 
   it("ignores an empty pattern", () => {
