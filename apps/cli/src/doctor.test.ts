@@ -129,6 +129,35 @@ describe("buildDoctorReport()", () => {
     const errors = report.checks.filter((c) => c.status === "error");
     expect(errors).toHaveLength(0);
   });
+
+  it("adds an ok Provider check when providerAutoDetected is true", () => {
+    const report = buildDoctorReport(
+      null,
+      { ...defaultConfig, provider: "anthropic", apiKey: "sk-ant-xxx" },
+      makePing({ provider: "anthropic" }),
+      { providerAutoDetected: true }
+    );
+    const providerCheck = report.checks.find((c) => c.label === "Provider");
+    expect(providerCheck?.status).toBe("ok");
+    expect(providerCheck?.detail).toContain("Auto-detected");
+    expect(providerCheck?.detail).toContain("ANTHROPIC_API_KEY");
+  });
+
+  it("does not add Provider check when providerAutoDetected is false", () => {
+    const report = buildDoctorReport(null, defaultConfig, makePing());
+    const providerCheck = report.checks.find((c) => c.label === "Provider");
+    expect(providerCheck).toBeUndefined();
+  });
+
+  it("report.ok is true when provider is auto-detected and everything else passes", () => {
+    const report = buildDoctorReport(
+      "/project/.ai-reviewrc.json",
+      { ...defaultConfig, provider: "anthropic", apiKey: "sk-ant-xxx" },
+      makePing({ provider: "anthropic" }),
+      { providerAutoDetected: true }
+    );
+    expect(report.ok).toBe(true);
+  });
 });
 
 describe("formatDoctorReport()", () => {
