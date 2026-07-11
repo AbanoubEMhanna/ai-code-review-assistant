@@ -13,6 +13,8 @@ function isValidId(id: string): boolean {
   return /^\d+-[a-z0-9]+$/.test(id);
 }
 
+let saveSequence = 0;
+
 export class ReviewHistoryStore {
   private readonly dir: string;
 
@@ -22,7 +24,11 @@ export class ReviewHistoryStore {
   }
 
   save(report: ReviewReport): StoredReview {
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    // Zero-padded sequence prefix keeps ids (and thus filename-sort order) monotonic
+    // even when several saves land within the same Date.now() millisecond.
+    const seq = (saveSequence++).toString(36).padStart(4, "0");
+    const rand = Math.random().toString(36).slice(2, 8);
+    const id = `${Date.now()}-${seq}${rand}`;
     const stored: StoredReview = { ...report, id };
     writeFileSync(join(this.dir, `${id}.json`), JSON.stringify(stored, null, 2), "utf8");
     return stored;
@@ -91,6 +97,11 @@ export class ReviewHistoryStore {
       }
     }
     return count;
+  }
+
+  /** Finds the most recent stored review with a matching diffHash, or null if none exists. */
+  findByHash(diffHash: string): StoredReview | null {
+    return this.list().find((r) => r.diffHash === diffHash) ?? null;
   }
 
   search(query: string, opts: { limit?: number } = {}): StoredReview[] {

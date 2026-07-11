@@ -18,6 +18,7 @@ import type { HistoryStats } from "./output.js";
 import { ReviewHistoryStore } from "./history-store.js";
 import { loadConfig, getConfigFilePath, type AiReviewConfig } from "./config.js";
 import { buildDoctorReport, formatDoctorReport, formatDoctorJson } from "./doctor.js";
+import { computeDiffHash } from "./cache.js";
 
 const fileConfig: AiReviewConfig = loadConfig();
 
@@ -85,29 +86,54 @@ async function runReview(
   outputFile: string | undefined,
   json: boolean,
   failOn: ReviewSeverity | undefined,
-  noSave: boolean
+  noSave: boolean,
+  useCache: boolean
 ): Promise<void> {
-  if (!json) {
-    console.log(`Reviewing ${diffSource} with ${opts.model} via ${opts.provider} (${opts.host})…`);
+  const diffHash = computeDiffHash(diff, opts.provider, opts.model);
+  const cached = useCache ? store.findByHash(diffHash) : null;
+
+  let report: ReviewReport;
+  if (cached) {
+    report = {
+      generatedAt: cached.generatedAt,
+      model: cached.model,
+      diffSource: cached.diffSource,
+      summary: cached.summary,
+      comments: cached.comments,
+      stats: cached.stats,
+      ...(cached.diffHash !== undefined ? { diffHash: cached.diffHash } : {}),
+    };
+    if (!json) {
+      console.log(
+        `Diff unchanged since review ${cached.id} — reusing that result (use --no-cache to force a fresh review).`
+      );
+    }
+  } else {
+    if (!json) {
+      console.log(
+        `Reviewing ${diffSource} with ${opts.model} via ${opts.provider} (${opts.host})…`
+      );
+    }
+    const { summary, comments } = await reviewDiff(diff, diffSource, opts);
+
+    const stats = {
+      high: comments.filter((c) => c.severity === "high").length,
+      medium: comments.filter((c) => c.severity === "medium").length,
+      low: comments.filter((c) => c.severity === "low").length,
+      info: comments.filter((c) => c.severity === "info").length,
+      total: comments.length,
+    };
+
+    report = {
+      generatedAt: new Date().toISOString(),
+      model: opts.model,
+      diffSource,
+      summary,
+      comments,
+      stats,
+      diffHash,
+    };
   }
-  const { summary, comments } = await reviewDiff(diff, diffSource, opts);
-
-  const stats = {
-    high: comments.filter((c) => c.severity === "high").length,
-    medium: comments.filter((c) => c.severity === "medium").length,
-    low: comments.filter((c) => c.severity === "low").length,
-    info: comments.filter((c) => c.severity === "info").length,
-    total: comments.length,
-  };
-
-  const report: ReviewReport = {
-    generatedAt: new Date().toISOString(),
-    model: opts.model,
-    diffSource,
-    summary,
-    comments,
-    stats,
-  };
 
   if (json) {
     printJson(report);
@@ -120,14 +146,14 @@ async function runReview(
     if (!json) console.log(`Report saved to ${outputFile}`);
   }
 
-  if (!noSave) {
+  if (!noSave && !cached) {
     const stored = store.save(report);
     if (!json) console.log(`Review saved to history (id: ${stored.id})`);
   }
 
   if (failOn !== undefined) {
     const threshold = SEVERITY_RANK[failOn];
-    const exceeded = comments.some((c) => SEVERITY_RANK[c.severity] >= threshold);
+    const exceeded = report.comments.some((c) => SEVERITY_RANK[c.severity] >= threshold);
     if (exceeded) {
       if (!json) {
         console.error(
@@ -161,7 +187,11 @@ const sharedOptions = (cmd: ReturnType<typeof program.command>) =>
       "--fail-on <severity>",
       "Exit with code 1 if any issue at this severity or above is found (high|medium|low|info)"
     )
-    .option("--no-save", "Do not save this review to history");
+    .option("--no-save", "Do not save this review to history")
+    .option(
+      "--no-cache",
+      "Always call the AI provider, even if this exact diff was reviewed before"
+    );
 
 type SharedOpts = {
   model: string;
@@ -173,6 +203,7 @@ type SharedOpts = {
   json?: boolean;
   failOn?: string;
   save: boolean;
+  cache: boolean;
 };
 
 sharedOptions(program.command("staged").description("Review staged changes (git add)")).action(
@@ -186,7 +217,8 @@ sharedOptions(program.command("staged").description("Review staged changes (git 
       opts.output,
       !!opts.json,
       failOn,
-      !opts.save
+      !opts.save,
+      opts.cache
     ).catch(die);
   }
 );
@@ -203,7 +235,8 @@ sharedOptions(
     opts.output,
     !!opts.json,
     failOn,
-    !opts.save
+    !opts.save,
+    opts.cache
   ).catch(die);
 });
 
@@ -219,7 +252,8 @@ sharedOptions(
     opts.output,
     !!opts.json,
     failOn,
-    !opts.save
+    !opts.save,
+    opts.cache
   ).catch(die);
 });
 
