@@ -77,6 +77,41 @@ async function chatCompletions(
   return content;
 }
 
+async function openaiChat(
+  apiKey: string,
+  model: string,
+  messages: Array<{ role: string; content: string }>,
+  maxTokens: number
+): Promise<string> {
+  const res = await fetchWithTimeout(
+    "https://api.openai.com/v1/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        max_tokens: maxTokens,
+        stream: false,
+      }),
+    },
+    120_000
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`OpenAI API request failed (${res.status}): ${text}`);
+  }
+  const data = (await res.json()) as {
+    choices: Array<{ message: { content: string } }>;
+  };
+  const content = data.choices[0]?.message?.content;
+  if (!content) throw new Error("Empty response from OpenAI");
+  return content;
+}
+
 async function ollamaChat(
   host: string,
   model: string,
@@ -132,6 +167,11 @@ export async function reviewDiff(
       buildUserPrompt(diff, diffSource),
       maxTokens
     );
+  } else if (opts.provider === "openai") {
+    if (!opts.apiKey) {
+      throw new Error("OpenAI provider requires an API key. Set OPENAI_API_KEY or use --api-key.");
+    }
+    raw = await openaiChat(opts.apiKey, opts.model, messages, maxTokens);
   } else if (opts.provider === "lmstudio") {
     raw = await chatCompletions(opts.host, opts.model, messages, maxTokens);
   } else {

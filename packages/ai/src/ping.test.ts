@@ -12,6 +12,7 @@ function mockFetch(status: number, body: unknown) {
       ok: status >= 200 && status < 300,
       status,
       json: () => Promise.resolve(body),
+      text: () => Promise.resolve(typeof body === "string" ? body : JSON.stringify(body)),
     })
   );
 }
@@ -144,6 +145,68 @@ describe("pingProvider — lmstudio", () => {
       provider: "lmstudio",
       host: "http://localhost:1234",
       model: "mistral-7b",
+    });
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("ECONNREFUSED");
+  });
+});
+
+describe("pingProvider — openai", () => {
+  it("returns ok=false with a clear error when no API key is given", async () => {
+    const result = await pingProvider({
+      provider: "openai",
+      host: "http://localhost:11434",
+      model: "gpt-4o-mini",
+    });
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("OPENAI_API_KEY");
+    expect(result.host).toBe("api.openai.com");
+  });
+
+  it("returns ok=true and modelFound=true when model is listed", async () => {
+    mockFetch(200, { data: [{ id: "gpt-4o-mini" }, { id: "gpt-4o" }] });
+    const result = await pingProvider({
+      provider: "openai",
+      host: "http://localhost:11434",
+      model: "gpt-4o-mini",
+      apiKey: "sk-test",
+    });
+    expect(result.ok).toBe(true);
+    expect(result.modelFound).toBe(true);
+    expect(result.host).toBe("api.openai.com");
+  });
+
+  it("returns ok=true and modelFound=false when model is absent", async () => {
+    mockFetch(200, { data: [{ id: "gpt-4o" }] });
+    const result = await pingProvider({
+      provider: "openai",
+      host: "http://localhost:11434",
+      model: "gpt-4o-mini",
+      apiKey: "sk-test",
+    });
+    expect(result.ok).toBe(true);
+    expect(result.modelFound).toBe(false);
+  });
+
+  it("returns ok=false on non-200 HTTP response", async () => {
+    mockFetch(401, "invalid api key");
+    const result = await pingProvider({
+      provider: "openai",
+      host: "http://localhost:11434",
+      model: "gpt-4o-mini",
+      apiKey: "sk-bad",
+    });
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/OpenAI API error \(401\)/);
+  });
+
+  it("returns ok=false on network error", async () => {
+    mockFetchError("ECONNREFUSED");
+    const result = await pingProvider({
+      provider: "openai",
+      host: "http://localhost:11434",
+      model: "gpt-4o-mini",
+      apiKey: "sk-test",
     });
     expect(result.ok).toBe(false);
     expect(result.error).toContain("ECONNREFUSED");

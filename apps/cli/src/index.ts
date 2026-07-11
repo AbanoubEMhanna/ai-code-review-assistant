@@ -28,8 +28,19 @@ const DEFAULT_PROVIDER = (process.env["AI_PROVIDER"] ??
 const DEFAULT_MODEL =
   process.env["AI_MODEL"] ??
   fileConfig.model ??
-  (DEFAULT_PROVIDER === "anthropic" ? "claude-sonnet-4-6" : "qwen3:latest");
-const DEFAULT_API_KEY = process.env["ANTHROPIC_API_KEY"];
+  (DEFAULT_PROVIDER === "anthropic"
+    ? "claude-sonnet-4-6"
+    : DEFAULT_PROVIDER === "openai"
+      ? "gpt-4o-mini"
+      : "qwen3:latest");
+
+function envApiKeyFor(provider: string): string | undefined {
+  if (provider === "openai") return process.env["OPENAI_API_KEY"];
+  if (provider === "anthropic") return process.env["ANTHROPIC_API_KEY"];
+  return undefined;
+}
+
+const DEFAULT_API_KEY = envApiKeyFor(DEFAULT_PROVIDER);
 
 const SEVERITY_RANK: Record<ReviewSeverity, number> = {
   high: 3,
@@ -47,15 +58,25 @@ function makeOpts(cmd: {
   apiKey?: string;
 }): ReviewOptions {
   const provider = cmd.provider.trim().toLowerCase();
-  if (provider !== "ollama" && provider !== "lmstudio" && provider !== "anthropic") {
+  if (
+    provider !== "ollama" &&
+    provider !== "lmstudio" &&
+    provider !== "anthropic" &&
+    provider !== "openai"
+  ) {
     throw new Error(
-      `Invalid provider "${cmd.provider}". Use "ollama", "lmstudio", or "anthropic".`
+      `Invalid provider "${cmd.provider}". Use "ollama", "lmstudio", "anthropic", or "openai".`
     );
   }
-  const apiKey = cmd.apiKey ?? DEFAULT_API_KEY;
+  const apiKey = cmd.apiKey ?? envApiKeyFor(provider) ?? DEFAULT_API_KEY;
   if (provider === "anthropic" && !apiKey) {
     throw new Error(
       "Anthropic provider requires an API key. Set ANTHROPIC_API_KEY or pass --api-key <key>."
+    );
+  }
+  if (provider === "openai" && !apiKey) {
+    throw new Error(
+      "OpenAI provider requires an API key. Set OPENAI_API_KEY or pass --api-key <key>."
     );
   }
   const opts: ReviewOptions = { model: cmd.model, host: cmd.host, provider };
@@ -141,7 +162,7 @@ async function runReview(
 
 program
   .name("ai-review")
-  .description("Local AI code review — powered by Ollama or LM Studio")
+  .description("Local AI code review — powered by Ollama, LM Studio, Anthropic, or OpenAI")
   .version("0.1.0");
 
 const sharedOptions = (cmd: ReturnType<typeof program.command>) =>
@@ -150,10 +171,10 @@ const sharedOptions = (cmd: ReturnType<typeof program.command>) =>
     .option("-H, --host <url>", "AI host URL (Ollama/LM Studio only)", DEFAULT_HOST)
     .option(
       "-p, --provider <provider>",
-      "Provider: ollama | lmstudio | anthropic",
+      "Provider: ollama | lmstudio | anthropic | openai",
       DEFAULT_PROVIDER
     )
-    .option("-k, --api-key <key>", "API key (Anthropic; or set ANTHROPIC_API_KEY env var)")
+    .option("-k, --api-key <key>", "API key (Anthropic/OpenAI; or set the matching env var)")
     .option("-t, --max-tokens <number>", "Maximum tokens for the AI response (default: 4096)")
     .option("-o, --output <file>", "Save Markdown report to file")
     .option("--json", "Output review as JSON (suppresses formatted output)")
@@ -230,8 +251,12 @@ program
   .description("Test connectivity to the configured AI provider")
   .option("-m, --model <model>", "Model name", DEFAULT_MODEL)
   .option("-H, --host <url>", "AI host URL (Ollama/LM Studio only)", DEFAULT_HOST)
-  .option("-p, --provider <provider>", "Provider: ollama | lmstudio | anthropic", DEFAULT_PROVIDER)
-  .option("-k, --api-key <key>", "API key (Anthropic; or set ANTHROPIC_API_KEY env var)")
+  .option(
+    "-p, --provider <provider>",
+    "Provider: ollama | lmstudio | anthropic | openai",
+    DEFAULT_PROVIDER
+  )
+  .option("-k, --api-key <key>", "API key (Anthropic/OpenAI; or set the matching env var)")
   .option("--json", "Output ping result as JSON (suppresses formatted output)")
   .action(
     async (opts: {
@@ -242,10 +267,15 @@ program
       json?: boolean;
     }) => {
       const provider = opts.provider.trim().toLowerCase();
-      if (provider !== "ollama" && provider !== "lmstudio" && provider !== "anthropic") {
+      if (
+        provider !== "ollama" &&
+        provider !== "lmstudio" &&
+        provider !== "anthropic" &&
+        provider !== "openai"
+      ) {
         if (!opts.json) {
           console.error(
-            `Invalid provider "${opts.provider}". Use "ollama", "lmstudio", or "anthropic".`
+            `Invalid provider "${opts.provider}". Use "ollama", "lmstudio", "anthropic", or "openai".`
           );
         } else {
           process.stderr.write(
@@ -254,7 +284,7 @@ program
         }
         process.exit(1);
       }
-      const apiKey = opts.apiKey ?? DEFAULT_API_KEY;
+      const apiKey = opts.apiKey ?? envApiKeyFor(provider) ?? DEFAULT_API_KEY;
       const pingOpts: Parameters<typeof pingProvider>[0] = {
         provider: provider as ReviewOptions["provider"],
         host: opts.host,
@@ -277,9 +307,13 @@ program
   .command("doctor")
   .description("Run a health check: verify config, connectivity, and model availability")
   .option("-H, --host <url>", "AI host URL (Ollama/LM Studio only)", DEFAULT_HOST)
-  .option("-p, --provider <provider>", "Provider: ollama | lmstudio | anthropic", DEFAULT_PROVIDER)
+  .option(
+    "-p, --provider <provider>",
+    "Provider: ollama | lmstudio | anthropic | openai",
+    DEFAULT_PROVIDER
+  )
   .option("-m, --model <model>", "Model name", DEFAULT_MODEL)
-  .option("-k, --api-key <key>", "API key (Anthropic; or set ANTHROPIC_API_KEY env var)")
+  .option("-k, --api-key <key>", "API key (Anthropic/OpenAI; or set the matching env var)")
   .option("--json", "Output diagnostic result as JSON")
   .action(
     async (opts: {
@@ -290,17 +324,27 @@ program
       json?: boolean;
     }) => {
       const provider = opts.provider.trim().toLowerCase() as ReviewOptions["provider"];
-      if (provider !== "ollama" && provider !== "lmstudio" && provider !== "anthropic") {
+      if (
+        provider !== "ollama" &&
+        provider !== "lmstudio" &&
+        provider !== "anthropic" &&
+        provider !== "openai"
+      ) {
         console.error(
-          `Invalid provider "${opts.provider}". Use "ollama", "lmstudio", or "anthropic".`
+          `Invalid provider "${opts.provider}". Use "ollama", "lmstudio", "anthropic", or "openai".`
         );
         process.exit(1);
       }
 
-      const apiKey = opts.apiKey ?? DEFAULT_API_KEY;
+      const apiKey = opts.apiKey ?? envApiKeyFor(provider) ?? DEFAULT_API_KEY;
       const effectiveConfig = {
         model: opts.model,
-        host: provider === "anthropic" ? "api.anthropic.com" : opts.host,
+        host:
+          provider === "anthropic"
+            ? "api.anthropic.com"
+            : provider === "openai"
+              ? "api.openai.com"
+              : opts.host,
         provider,
         ...(apiKey ? { apiKey } : {}),
       };

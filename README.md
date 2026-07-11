@@ -64,12 +64,13 @@ node apps/cli/dist/index.js staged --output review.md
 
 **Options** (all commands):
 
-| Flag             | Default                  | Description                  |
-| ---------------- | ------------------------ | ---------------------------- |
-| `-m, --model`    | `qwen3:latest`           | Model name                   |
-| `-H, --host`     | `http://localhost:11434` | AI host URL                  |
-| `-p, --provider` | `ollama`                 | `ollama` or `lmstudio`       |
-| `-o, --output`   | —                        | Save report to Markdown file |
+| Flag             | Default                  | Description                                             |
+| ---------------- | ------------------------ | ------------------------------------------------------- |
+| `-m, --model`    | `qwen3:latest`           | Model name                                              |
+| `-H, --host`     | `http://localhost:11434` | AI host URL (Ollama/LM Studio only)                     |
+| `-p, --provider` | `ollama`                 | `ollama`, `lmstudio`, `anthropic`, or `openai`          |
+| `-k, --api-key`  | —                        | API key (Anthropic/OpenAI; or set the matching env var) |
+| `-o, --output`   | —                        | Save report to Markdown file                            |
 
 **Using LM Studio:**
 
@@ -80,12 +81,21 @@ node apps/cli/dist/index.js staged \
   --model "lmstudio-community/qwen3-8b"
 ```
 
+**Using OpenAI:**
+
+```bash
+export OPENAI_API_KEY=sk-...
+node apps/cli/dist/index.js staged \
+  --provider openai \
+  --model gpt-4o-mini
+```
+
 ## Monorepo Layout
 
 - `apps/cli`: TypeScript CLI — the main entry point
 - `apps/web`: optional review dashboard (future)
 - `apps/api`: optional review API (future)
-- `packages/ai`: model clients (Ollama + LM Studio) and review prompts
+- `packages/ai`: model clients (Ollama, LM Studio, Anthropic, OpenAI) and review prompts
 - `packages/shared`: shared types — `ReviewReport`, `ReviewComment`, `ReviewSeverity`
 - `packages/db`: optional persisted review storage (future)
 
