@@ -30,4 +30,6 @@ export interface ReviewOptions {
   provider: "ollama" | "lmstudio" | "anthropic";
   maxTokens?: number;
   apiKey?: string;
+  /** Scrub common secret formats from the diff before sending it to the AI provider. Default: true. */
+  redactSecrets?: boolean;
 }

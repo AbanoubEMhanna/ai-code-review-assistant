@@ -64,12 +64,17 @@ node apps/cli/dist/index.js staged --output review.md
 
 **Options** (all commands):
 
-| Flag             | Default                  | Description                  |
-| ---------------- | ------------------------ | ---------------------------- |
-| `-m, --model`    | `qwen3:latest`           | Model name                   |
-| `-H, --host`     | `http://localhost:11434` | AI host URL                  |
-| `-p, --provider` | `ollama`                 | `ollama` or `lmstudio`       |
-| `-o, --output`   | —                        | Save report to Markdown file |
+| Flag                  | Default                  | Description                                                                         |
+| --------------------- | ------------------------ | ----------------------------------------------------------------------------------- |
+| `-m, --model`         | `qwen3:latest`           | Model name                                                                          |
+| `-H, --host`          | `http://localhost:11434` | AI host URL                                                                         |
+| `-p, --provider`      | `ollama`                 | `ollama` or `lmstudio`                                                              |
+| `-o, --output`        | —                        | Save report to Markdown file                                                        |
+| `--no-redact-secrets` | (redaction on)           | Skip scrubbing potential secrets from the diff before sending it to the AI provider |
+
+## Secret redaction
+
+Before a diff is sent to the AI provider, `ai-review` scrubs common secret formats — private key blocks, cloud provider keys (AWS, Google, Stripe), GitHub/Slack tokens, JWTs, and generic `password`/`token`/`apiKey` assignments — replacing them with a `[REDACTED:<category>]` placeholder. This matters most when using the `anthropic` provider, since the diff leaves your machine. A warning listing which categories were found is printed to stderr; pass `--no-redact-secrets` to disable this.
 
 **Using LM Studio:**
 
