@@ -4,6 +4,7 @@ import { program } from "commander";
 import { reviewDiff, pingProvider } from "@ai-review/ai";
 import type { ReviewOptions, ReviewReport, ReviewSeverity } from "@ai-review/shared";
 import { getStagedDiff, getBranchDiff, getFileDiff } from "./git.js";
+import { filterDiff, getDefaultIgnorePatterns } from "./diff-filter.js";
 import {
   printReport,
   printJson,
@@ -74,6 +75,32 @@ function parseFailOn(value: string): ReviewSeverity {
   const v = value.trim().toLowerCase();
   if (v === "high" || v === "medium" || v === "low" || v === "info") return v;
   throw new Error(`--fail-on must be one of: high, medium, low, info. Got "${value}"`);
+}
+
+function collect(value: string, previous: string[]): string[] {
+  return previous.concat([value]);
+}
+
+function applyIgnoreFilters(
+  diff: string,
+  opts: { ignore: string[]; defaultIgnore: boolean },
+  json: boolean
+): string {
+  const patterns = [
+    ...(opts.defaultIgnore ? getDefaultIgnorePatterns() : []),
+    ...(fileConfig.ignore ?? []),
+    ...opts.ignore,
+  ];
+  const { filtered, ignoredFiles } = filterDiff(diff, patterns);
+  if (ignoredFiles.length > 0 && !json) {
+    console.error(
+      `⚠ Ignored ${ignoredFiles.length} file(s) matching ignore patterns: ${ignoredFiles.join(", ")}`
+    );
+  }
+  if (!filtered.trim()) {
+    throw new Error("No changes to review after applying ignore patterns.");
+  }
+  return filtered;
 }
 
 const store = new ReviewHistoryStore();
@@ -161,7 +188,17 @@ const sharedOptions = (cmd: ReturnType<typeof program.command>) =>
       "--fail-on <severity>",
       "Exit with code 1 if any issue at this severity or above is found (high|medium|low|info)"
     )
-    .option("--no-save", "Do not save this review to history");
+    .option("--no-save", "Do not save this review to history")
+    .option(
+      "--ignore <pattern>",
+      "Glob pattern for files to exclude from review (repeatable)",
+      collect,
+      []
+    )
+    .option(
+      "--no-default-ignore",
+      "Disable built-in ignore patterns (lockfiles, dist/**, minified files)"
+    );
 
 type SharedOpts = {
   model: string;
@@ -173,11 +210,15 @@ type SharedOpts = {
   json?: boolean;
   failOn?: string;
   save: boolean;
+  ignore: string[];
+  defaultIgnore: boolean;
 };
 
 sharedOptions(program.command("staged").description("Review staged changes (git add)")).action(
   async (opts: SharedOpts) => {
-    const diff = await getStagedDiff().catch(die);
+    const diff = await getStagedDiff()
+      .then((d) => applyIgnoreFilters(d, opts, !!opts.json))
+      .catch(die);
     const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
     await runReview(
       diff,
@@ -194,7 +235,9 @@ sharedOptions(program.command("staged").description("Review staged changes (git 
 sharedOptions(
   program.command("branch <base>").description("Review commits on HEAD not in <base>")
 ).action(async (base: string, opts: SharedOpts) => {
-  const diff = await getBranchDiff(base).catch(die);
+  const diff = await getBranchDiff(base)
+    .then((d) => applyIgnoreFilters(d, opts, !!opts.json))
+    .catch(die);
   const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
   await runReview(
     diff,
@@ -210,7 +253,9 @@ sharedOptions(
 sharedOptions(
   program.command("file <path>").description("Review unstaged or staged changes to a specific file")
 ).action(async (filePath: string, opts: SharedOpts) => {
-  const diff = await getFileDiff(filePath).catch(die);
+  const diff = await getFileDiff(filePath)
+    .then((d) => applyIgnoreFilters(d, opts, !!opts.json))
+    .catch(die);
   const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
   await runReview(
     diff,

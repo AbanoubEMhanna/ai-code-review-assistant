@@ -64,12 +64,34 @@ node apps/cli/dist/index.js staged --output review.md
 
 **Options** (all commands):
 
-| Flag             | Default                  | Description                  |
-| ---------------- | ------------------------ | ---------------------------- |
-| `-m, --model`    | `qwen3:latest`           | Model name                   |
-| `-H, --host`     | `http://localhost:11434` | AI host URL                  |
-| `-p, --provider` | `ollama`                 | `ollama` or `lmstudio`       |
-| `-o, --output`   | —                        | Save report to Markdown file |
+| Flag                  | Default                  | Description                                                                 |
+| --------------------- | ------------------------ | --------------------------------------------------------------------------- |
+| `-m, --model`         | `qwen3:latest`           | Model name                                                                  |
+| `-H, --host`          | `http://localhost:11434` | AI host URL                                                                 |
+| `-p, --provider`      | `ollama`                 | `ollama` or `lmstudio`                                                      |
+| `-o, --output`        | —                        | Save report to Markdown file                                                |
+| `--ignore <pattern>`  | —                        | Glob pattern for files to exclude from review (repeatable)                  |
+| `--no-default-ignore` | —                        | Disable the built-in ignore patterns (lockfiles, `dist/**`, minified files) |
+
+### Ignoring files
+
+By default, common noisy or generated files are excluded from what gets sent to the AI provider: lockfiles (`pnpm-lock.yaml`, `package-lock.json`, `yarn.lock`), minified/sourcemap files (`*.min.js`, `*.min.css`, `*.map`), and `dist/**` / `build/**` output. This keeps reviews focused on code that was actually written by hand and avoids wasting tokens on generated diffs.
+
+```bash
+# Add extra patterns on top of the defaults
+node apps/cli/dist/index.js staged --ignore "*.generated.ts" --ignore "vendor/**"
+
+# Disable the built-in defaults entirely
+node apps/cli/dist/index.js staged --no-default-ignore
+```
+
+Patterns without a `/` match the filename at any depth (like `.gitignore`); patterns with a `/` match the full path, and `**` matches across directories. You can also persist patterns in `.ai-reviewrc.json`:
+
+```json
+{
+  "ignore": ["*.generated.ts", "vendor/**"]
+}
+```
 
 **Using LM Studio:**
 
