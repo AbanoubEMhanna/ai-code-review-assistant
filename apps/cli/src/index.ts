@@ -175,52 +175,36 @@ type SharedOpts = {
   save: boolean;
 };
 
+async function withDiffReview(
+  getDiff: () => Promise<string>,
+  diffSource: string,
+  opts: SharedOpts
+): Promise<void> {
+  try {
+    const diff = await getDiff();
+    const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
+    await runReview(diff, diffSource, makeOpts(opts), opts.output, !!opts.json, failOn, !opts.save);
+  } catch (err) {
+    die(err);
+  }
+}
+
 sharedOptions(program.command("staged").description("Review staged changes (git add)")).action(
   async (opts: SharedOpts) => {
-    const diff = await getStagedDiff().catch(die);
-    const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
-    await runReview(
-      diff,
-      "staged changes",
-      makeOpts(opts),
-      opts.output,
-      !!opts.json,
-      failOn,
-      !opts.save
-    ).catch(die);
+    await withDiffReview(getStagedDiff, "staged changes", opts);
   }
 );
 
 sharedOptions(
   program.command("branch <base>").description("Review commits on HEAD not in <base>")
 ).action(async (base: string, opts: SharedOpts) => {
-  const diff = await getBranchDiff(base).catch(die);
-  const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
-  await runReview(
-    diff,
-    `diff vs ${base}`,
-    makeOpts(opts),
-    opts.output,
-    !!opts.json,
-    failOn,
-    !opts.save
-  ).catch(die);
+  await withDiffReview(() => getBranchDiff(base), `diff vs ${base}`, opts);
 });
 
 sharedOptions(
   program.command("file <path>").description("Review unstaged or staged changes to a specific file")
 ).action(async (filePath: string, opts: SharedOpts) => {
-  const diff = await getFileDiff(filePath).catch(die);
-  const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
-  await runReview(
-    diff,
-    `file: ${filePath}`,
-    makeOpts(opts),
-    opts.output,
-    !!opts.json,
-    failOn,
-    !opts.save
-  ).catch(die);
+  await withDiffReview(() => getFileDiff(filePath), `file: ${filePath}`, opts);
 });
 
 // ─── ping command ─────────────────────────────────────────────────────────
