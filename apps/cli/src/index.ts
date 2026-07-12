@@ -161,6 +161,10 @@ const sharedOptions = (cmd: ReturnType<typeof program.command>) =>
       "--fail-on <severity>",
       "Exit with code 1 if any issue at this severity or above is found (high|medium|low|info)"
     )
+    .option(
+      "-U, --context-lines <number>",
+      "Lines of context around each diff hunk (default: git's default of 3)"
+    )
     .option("--no-save", "Do not save this review to history");
 
 type SharedOpts = {
@@ -172,12 +176,23 @@ type SharedOpts = {
   apiKey?: string;
   json?: boolean;
   failOn?: string;
+  contextLines?: string;
   save: boolean;
 };
 
+function parseContextLines(value: string): number {
+  const n = parseInt(value, 10);
+  if (isNaN(n) || n < 0) {
+    throw new Error(`--context-lines must be a non-negative integer, got "${value}"`);
+  }
+  return n;
+}
+
 sharedOptions(program.command("staged").description("Review staged changes (git add)")).action(
   async (opts: SharedOpts) => {
-    const diff = await getStagedDiff().catch(die);
+    const contextLines =
+      opts.contextLines !== undefined ? parseContextLines(opts.contextLines) : undefined;
+    const diff = await getStagedDiff(contextLines).catch(die);
     const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
     await runReview(
       diff,
@@ -194,7 +209,9 @@ sharedOptions(program.command("staged").description("Review staged changes (git 
 sharedOptions(
   program.command("branch <base>").description("Review commits on HEAD not in <base>")
 ).action(async (base: string, opts: SharedOpts) => {
-  const diff = await getBranchDiff(base).catch(die);
+  const contextLines =
+    opts.contextLines !== undefined ? parseContextLines(opts.contextLines) : undefined;
+  const diff = await getBranchDiff(base, contextLines).catch(die);
   const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
   await runReview(
     diff,
@@ -210,7 +227,9 @@ sharedOptions(
 sharedOptions(
   program.command("file <path>").description("Review unstaged or staged changes to a specific file")
 ).action(async (filePath: string, opts: SharedOpts) => {
-  const diff = await getFileDiff(filePath).catch(die);
+  const contextLines =
+    opts.contextLines !== undefined ? parseContextLines(opts.contextLines) : undefined;
+  const diff = await getFileDiff(filePath, contextLines).catch(die);
   const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
   await runReview(
     diff,
