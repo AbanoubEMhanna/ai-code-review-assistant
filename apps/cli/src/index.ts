@@ -18,6 +18,7 @@ import type { HistoryStats } from "./output.js";
 import { ReviewHistoryStore } from "./history-store.js";
 import { loadConfig, getConfigFilePath, type AiReviewConfig } from "./config.js";
 import { buildDoctorReport, formatDoctorReport, formatDoctorJson } from "./doctor.js";
+import { installHook, uninstallHook, showHookStatus, type HookType } from "./hook.js";
 
 const fileConfig: AiReviewConfig = loadConfig();
 
@@ -548,6 +549,89 @@ configCmd
     writeFileSync(".ai-reviewrc.json", JSON.stringify(defaults, null, 2) + "\n", "utf8");
     console.log("Created .ai-reviewrc.json with current defaults.");
     console.log("Edit it to set your preferred model, host, and provider.");
+  });
+
+// ─── hook subcommand group ─────────────────────────────────────────────────
+
+const hookCmd = program.command("hook").description("Manage git hook integration");
+
+hookCmd
+  .command("install")
+  .description("Install an ai-review git hook (default: pre-commit)")
+  .option("--hook <type>", "Hook type to install: pre-commit | pre-push", "pre-commit")
+  .option("--fail-on <severity>", "Add --fail-on <severity> to the hook (high|medium|low|info)")
+  .option("--base <branch>", "Base branch for pre-push hook comparison (default: main)", "main")
+  .option("--force", "Overwrite an existing hook even if not managed by ai-review")
+  .action((opts: { hook: string; failOn?: string; base: string; force?: boolean }) => {
+    const hookType = opts.hook.trim().toLowerCase();
+    if (hookType !== "pre-commit" && hookType !== "pre-push") {
+      console.error(`Invalid hook type "${opts.hook}". Use "pre-commit" or "pre-push".`);
+      process.exit(1);
+    }
+    try {
+      const validatedFailOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
+      installHook(hookType as HookType, {
+        ...(validatedFailOn !== undefined ? { failOn: validatedFailOn } : {}),
+        base: opts.base,
+        ...(opts.force !== undefined ? { force: opts.force } : {}),
+      });
+      console.log(`✓ Installed ${hookType} hook at .git/hooks/${hookType}`);
+      if (hookType === "pre-commit") {
+        console.log(
+          "  Runs: ai-review staged" + (validatedFailOn ? ` --fail-on ${validatedFailOn}` : "")
+        );
+      } else {
+        console.log(
+          `  Runs: ai-review branch ${opts.base}` +
+            (validatedFailOn ? ` --fail-on ${validatedFailOn}` : "")
+        );
+      }
+      console.log(`  Remove with: ai-review hook uninstall --hook ${hookType}`);
+    } catch (err) {
+      console.error("Error:", err instanceof Error ? err.message : String(err));
+      process.exit(1);
+    }
+  });
+
+hookCmd
+  .command("uninstall")
+  .description("Remove an ai-review-managed git hook")
+  .option("--hook <type>", "Hook type to remove: pre-commit | pre-push", "pre-commit")
+  .action((opts: { hook: string }) => {
+    const hookType = opts.hook.trim().toLowerCase();
+    if (hookType !== "pre-commit" && hookType !== "pre-push") {
+      console.error(`Invalid hook type "${opts.hook}". Use "pre-commit" or "pre-push".`);
+      process.exit(1);
+    }
+    const result = uninstallHook(hookType as HookType);
+    if (result === "removed") {
+      console.log(`✓ Removed ${hookType} hook from .git/hooks/${hookType}`);
+    } else if (result === "not-found") {
+      console.log(`No ${hookType} hook found at .git/hooks/${hookType}`);
+    } else {
+      console.error(
+        `.git/hooks/${hookType} exists but was not installed by ai-review.\nRemove it manually if needed.`
+      );
+      process.exit(1);
+    }
+  });
+
+hookCmd
+  .command("status")
+  .description("Show which git hooks are managed by ai-review")
+  .action(() => {
+    const statuses = showHookStatus(".git");
+    console.log("\nGit hook status:");
+    for (const { hook, installed, managed } of statuses) {
+      if (!installed) {
+        console.log(`  ${hook.padEnd(12)}  not installed`);
+      } else if (managed) {
+        console.log(`  ${hook.padEnd(12)}  ✓ managed by ai-review`);
+      } else {
+        console.log(`  ${hook.padEnd(12)}  installed (not managed by ai-review)`);
+      }
+    }
+    console.log();
   });
 
 function die(err: unknown): never {
