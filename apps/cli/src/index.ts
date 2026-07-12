@@ -336,8 +336,9 @@ historyCmd
   .description("List saved reviews (newest first)")
   .option("-n, --limit <number>", "Number of reviews to show", "20")
   .option("-s, --source <pattern>", "Filter by diff source (exact match)")
+  .option("-M, --model <filter>", "Filter by model name (substring match, case-insensitive)")
   .option("--json", "Output as JSON array")
-  .action((opts: { limit: string; source?: string; json?: boolean }) => {
+  .action((opts: { limit: string; source?: string; model?: string; json?: boolean }) => {
     const limit = parseInt(opts.limit, 10);
     if (isNaN(limit) || limit < 1) {
       console.error(`Invalid --limit "${opts.limit}". Use a positive integer.`);
@@ -346,6 +347,7 @@ historyCmd
     const reviews = store.list({
       limit,
       ...(opts.source !== undefined ? { diffSource: opts.source } : {}),
+      ...(opts.model !== undefined ? { model: opts.model } : {}),
     });
     if (opts.json) {
       printHistoryListJson(reviews);
@@ -402,9 +404,16 @@ historyCmd
   .command("stats")
   .description("Show aggregate statistics across saved reviews")
   .option("-s, --source <pattern>", "Restrict stats to a specific diff source (exact match)")
+  .option(
+    "-M, --model <filter>",
+    "Restrict stats to a specific model (substring match, case-insensitive)"
+  )
   .option("--json", "Output as JSON")
-  .action((opts: { source?: string; json?: boolean }) => {
-    const reviews = store.list(opts.source !== undefined ? { diffSource: opts.source } : {});
+  .action((opts: { source?: string; model?: string; json?: boolean }) => {
+    const reviews = store.list({
+      ...(opts.source !== undefined ? { diffSource: opts.source } : {}),
+      ...(opts.model !== undefined ? { model: opts.model } : {}),
+    });
     if (reviews.length === 0) {
       if (opts.json) {
         printHistoryStatsJson({
