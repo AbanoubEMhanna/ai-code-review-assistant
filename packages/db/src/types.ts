@@ -32,4 +32,6 @@ export interface StoredReview extends ReviewReport {
 export interface ListOptions {
   limit?: number;
   diffSource?: string;
+  since?: Date;
+  until?: Date;
 }

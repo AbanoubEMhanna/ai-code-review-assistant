@@ -38,7 +38,9 @@ export class ReviewHistoryStore {
     }
   }
 
-  list(opts: { limit?: number; diffSource?: string } = {}): StoredReview[] {
+  list(
+    opts: { limit?: number; diffSource?: string; since?: Date; until?: Date } = {}
+  ): StoredReview[] {
     let files: string[];
     try {
       files = readdirSync(this.dir).filter((f) => f.endsWith(".json"));
@@ -57,6 +59,14 @@ export class ReviewHistoryStore {
 
     if (opts.diffSource !== undefined) {
       reviews = reviews.filter((r) => r.diffSource === opts.diffSource);
+    }
+    if (opts.since !== undefined) {
+      const sinceMs = opts.since.getTime();
+      reviews = reviews.filter((r) => Date.parse(r.generatedAt) >= sinceMs);
+    }
+    if (opts.until !== undefined) {
+      const untilMs = opts.until.getTime();
+      reviews = reviews.filter((r) => Date.parse(r.generatedAt) <= untilMs);
     }
     if (opts.limit && opts.limit > 0) {
       reviews = reviews.slice(0, opts.limit);
@@ -93,7 +103,7 @@ export class ReviewHistoryStore {
     return count;
   }
 
-  search(query: string, opts: { limit?: number } = {}): StoredReview[] {
+  search(query: string, opts: { limit?: number; since?: Date; until?: Date } = {}): StoredReview[] {
     const terms = query
       .toLowerCase()
       .split(/\s+/)
@@ -101,7 +111,10 @@ export class ReviewHistoryStore {
 
     if (terms.length === 0) return [];
 
-    const all = this.list();
+    const all = this.list({
+      ...(opts.since !== undefined ? { since: opts.since } : {}),
+      ...(opts.until !== undefined ? { until: opts.until } : {}),
+    });
     const matches = all.filter((r) => {
       const haystack = [r.diffSource, r.summary, r.model, ...r.comments.map((c) => c.message)]
         .join(" ")
