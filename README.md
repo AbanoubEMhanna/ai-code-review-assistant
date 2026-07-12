@@ -52,6 +52,9 @@ pnpm build
 # Review staged changes
 node apps/cli/dist/index.js staged
 
+# Review unstaged changes (edited but not yet `git add`-ed)
+node apps/cli/dist/index.js unstaged
+
 # Review all commits on this branch vs main
 node apps/cli/dist/index.js branch main
 

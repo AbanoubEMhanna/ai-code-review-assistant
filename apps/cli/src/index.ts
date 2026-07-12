@@ -3,7 +3,7 @@ import { writeFileSync } from "node:fs";
 import { program } from "commander";
 import { reviewDiff, pingProvider } from "@ai-review/ai";
 import type { ReviewOptions, ReviewReport, ReviewSeverity } from "@ai-review/shared";
-import { getStagedDiff, getBranchDiff, getFileDiff } from "./git.js";
+import { getStagedDiff, getUnstagedDiff, getBranchDiff, getFileDiff } from "./git.js";
 import {
   printReport,
   printJson,
@@ -190,6 +190,22 @@ sharedOptions(program.command("staged").description("Review staged changes (git 
     ).catch(die);
   }
 );
+
+sharedOptions(
+  program.command("unstaged").description("Review unstaged changes to tracked files")
+).action(async (opts: SharedOpts) => {
+  const diff = await getUnstagedDiff().catch(die);
+  const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
+  await runReview(
+    diff,
+    "unstaged changes",
+    makeOpts(opts),
+    opts.output,
+    !!opts.json,
+    failOn,
+    !opts.save
+  ).catch(die);
+});
 
 sharedOptions(
   program.command("branch <base>").description("Review commits on HEAD not in <base>")
