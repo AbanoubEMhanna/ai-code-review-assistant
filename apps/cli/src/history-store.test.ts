@@ -118,3 +118,54 @@ describe("ReviewHistoryStore.search()", () => {
     expect(store.search("anything")).toHaveLength(0);
   });
 });
+
+describe("ReviewHistoryStore.pruneOlderThan()", () => {
+  const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+  it("deletes reviews older than the cutoff and keeps recent ones", () => {
+    store.save(makeReport({ generatedAt: new Date(Date.now() - 8 * MS_PER_DAY).toISOString() }));
+    store.save(makeReport({ generatedAt: new Date(Date.now() - 6 * MS_PER_DAY).toISOString() }));
+    store.save(makeReport());
+
+    const deleted = store.pruneOlderThan(7);
+    expect(deleted).toBe(1);
+    expect(store.list()).toHaveLength(2);
+  });
+
+  it("returns 0 when no reviews are old enough", () => {
+    store.save(makeReport());
+    expect(store.pruneOlderThan(7)).toBe(0);
+    expect(store.list()).toHaveLength(1);
+  });
+
+  it("deletes all reviews when all are older than the cutoff", () => {
+    const oldDate = new Date(Date.now() - 30 * MS_PER_DAY).toISOString();
+    store.save(makeReport({ generatedAt: oldDate }));
+    store.save(makeReport({ generatedAt: oldDate }));
+
+    const deleted = store.pruneOlderThan(7);
+    expect(deleted).toBe(2);
+    expect(store.list()).toHaveLength(0);
+  });
+
+  it("returns 0 on an empty store", () => {
+    expect(store.pruneOlderThan(7)).toBe(0);
+  });
+
+  it("reviews exactly at the cutoff boundary are kept (strict less-than)", () => {
+    // 1 second inside the window → should be kept
+    store.save(
+      makeReport({ generatedAt: new Date(Date.now() - 7 * MS_PER_DAY + 1000).toISOString() })
+    );
+    expect(store.pruneOlderThan(7)).toBe(0);
+    expect(store.list()).toHaveLength(1);
+  });
+
+  it("reviews 1 ms before the cutoff are deleted", () => {
+    store.save(
+      makeReport({ generatedAt: new Date(Date.now() - 7 * MS_PER_DAY - 1).toISOString() })
+    );
+    expect(store.pruneOlderThan(7)).toBe(1);
+    expect(store.list()).toHaveLength(0);
+  });
+});

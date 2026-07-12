@@ -480,6 +480,61 @@ historyCmd
   });
 
 historyCmd
+  .command("prune")
+  .description("Delete reviews older than N days")
+  .requiredOption("-d, --days <number>", "Delete reviews older than this many days")
+  .option("--dry-run", "Preview what would be deleted without actually deleting")
+  .option("--json", "Output result as JSON")
+  .action((opts: { days: string; dryRun?: boolean; json?: boolean }) => {
+    const days = parseInt(opts.days, 10);
+    if (isNaN(days) || days < 1) {
+      console.error(`Invalid --days "${opts.days}". Use a positive integer.`);
+      process.exit(1);
+    }
+
+    const cutoffMs = Date.now() - days * 24 * 60 * 60 * 1000;
+    const candidates = store.list().filter((r) => {
+      const ts = Date.parse(r.generatedAt);
+      return !isNaN(ts) && ts < cutoffMs;
+    });
+
+    if (opts.dryRun) {
+      if (opts.json) {
+        process.stdout.write(
+          JSON.stringify(
+            { dryRun: true, days, count: candidates.length, ids: candidates.map((r) => r.id) },
+            null,
+            2
+          ) + "\n"
+        );
+      } else {
+        if (candidates.length === 0) {
+          console.log(`No reviews older than ${days} day(s) to delete.`);
+        } else {
+          console.log(`Would delete ${candidates.length} review(s) older than ${days} day(s):`);
+          for (const r of candidates) {
+            const date = new Date(r.generatedAt).toLocaleString();
+            console.log(`  ${r.id}  ${r.diffSource}  (${date})`);
+          }
+        }
+      }
+      return;
+    }
+
+    const deleted = store.pruneOlderThan(days);
+
+    if (opts.json) {
+      process.stdout.write(JSON.stringify({ days, deleted }, null, 2) + "\n");
+    } else {
+      if (deleted === 0) {
+        console.log(`No reviews older than ${days} day(s) to delete.`);
+      } else {
+        console.log(`Deleted ${deleted} review(s) older than ${days} day(s).`);
+      }
+    }
+  });
+
+historyCmd
   .command("search <query>")
   .description("Search saved reviews by keyword (searches summary, source, model, and comments)")
   .option("-n, --limit <number>", "Maximum results to show", "20")
