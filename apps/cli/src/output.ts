@@ -178,6 +178,34 @@ export function saveMarkdown(report: ReviewReport, outputPath: string): void {
   writeFileSync(outputPath, md, "utf8");
 }
 
+export function printSummaryOnly(report: ReviewReport): void {
+  console.log("\n" + chalk.bold.underline("AI Code Review — Summary"));
+  console.log(
+    chalk.dim(`Model: ${report.model}  |  Source: ${report.diffSource}  |  ${report.generatedAt}`)
+  );
+  console.log();
+  console.log(chalk.bold("Summary"));
+  console.log(report.summary);
+  console.log();
+
+  const { stats } = report;
+  const parts = [
+    stats.high > 0 ? chalk.red.bold(`${stats.high} high`) : null,
+    stats.medium > 0 ? chalk.yellow.bold(`${stats.medium} medium`) : null,
+    stats.low > 0 ? chalk.cyan(`${stats.low} low`) : null,
+    stats.info > 0 ? chalk.gray(`${stats.info} info`) : null,
+  ].filter(Boolean);
+
+  console.log(
+    chalk.bold("Issues: ") + (parts.length ? parts.join(chalk.dim("  ·  ")) : chalk.green("none"))
+  );
+
+  if (stats.total > 0) {
+    console.log(chalk.dim(`\nRun without --summary-only to see individual issues.`));
+  }
+  console.log();
+}
+
 export function printJson(report: ReviewReport): void {
   process.stdout.write(JSON.stringify(report, null, 2) + "\n");
 }

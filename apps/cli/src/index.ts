@@ -6,6 +6,7 @@ import type { ReviewOptions, ReviewReport, ReviewSeverity } from "@ai-review/sha
 import { getStagedDiff, getBranchDiff, getFileDiff } from "./git.js";
 import {
   printReport,
+  printSummaryOnly,
   printJson,
   printPingJson,
   printHistoryStats,
@@ -85,7 +86,8 @@ async function runReview(
   outputFile: string | undefined,
   json: boolean,
   failOn: ReviewSeverity | undefined,
-  noSave: boolean
+  noSave: boolean,
+  summaryOnly: boolean
 ): Promise<void> {
   if (!json) {
     console.log(`Reviewing ${diffSource} with ${opts.model} via ${opts.provider} (${opts.host})…`);
@@ -111,6 +113,8 @@ async function runReview(
 
   if (json) {
     printJson(report);
+  } else if (summaryOnly) {
+    printSummaryOnly(report);
   } else {
     printReport(report);
   }
@@ -161,7 +165,8 @@ const sharedOptions = (cmd: ReturnType<typeof program.command>) =>
       "--fail-on <severity>",
       "Exit with code 1 if any issue at this severity or above is found (high|medium|low|info)"
     )
-    .option("--no-save", "Do not save this review to history");
+    .option("--no-save", "Do not save this review to history")
+    .option("--summary-only", "Show only the AI summary and issue counts, not individual issues");
 
 type SharedOpts = {
   model: string;
@@ -173,6 +178,7 @@ type SharedOpts = {
   json?: boolean;
   failOn?: string;
   save: boolean;
+  summaryOnly?: boolean;
 };
 
 sharedOptions(program.command("staged").description("Review staged changes (git add)")).action(
@@ -186,7 +192,8 @@ sharedOptions(program.command("staged").description("Review staged changes (git 
       opts.output,
       !!opts.json,
       failOn,
-      !opts.save
+      !opts.save,
+      !!opts.summaryOnly
     ).catch(die);
   }
 );
@@ -203,7 +210,8 @@ sharedOptions(
     opts.output,
     !!opts.json,
     failOn,
-    !opts.save
+    !opts.save,
+    !!opts.summaryOnly
   ).catch(die);
 });
 
@@ -219,7 +227,8 @@ sharedOptions(
     opts.output,
     !!opts.json,
     failOn,
-    !opts.save
+    !opts.save,
+    !!opts.summaryOnly
   ).catch(die);
 });
 
