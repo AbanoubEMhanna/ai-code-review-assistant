@@ -16,7 +16,14 @@ import {
 } from "./output.js";
 import type { HistoryStats } from "./output.js";
 import { ReviewHistoryStore } from "./history-store.js";
-import { loadConfig, getConfigFilePath, type AiReviewConfig } from "./config.js";
+import {
+  loadConfig,
+  getConfigFilePath,
+  isConfigKey,
+  setConfigValue,
+  unsetConfigValue,
+  type AiReviewConfig,
+} from "./config.js";
 import { buildDoctorReport, formatDoctorReport, formatDoctorJson } from "./doctor.js";
 
 const fileConfig: AiReviewConfig = loadConfig();
@@ -548,6 +555,40 @@ configCmd
     writeFileSync(".ai-reviewrc.json", JSON.stringify(defaults, null, 2) + "\n", "utf8");
     console.log("Created .ai-reviewrc.json with current defaults.");
     console.log("Edit it to set your preferred model, host, and provider.");
+  });
+
+configCmd
+  .command("set <key> <value>")
+  .description("Set a config value in .ai-reviewrc.json (creates file if needed)")
+  .action((key: string, value: string) => {
+    if (!isConfigKey(key)) {
+      console.error(`Unknown config key "${key}". Valid keys: model, host, provider, maxTokens`);
+      process.exit(1);
+    }
+    try {
+      setConfigValue(key, value);
+      const configPath = getConfigFilePath() ?? ".ai-reviewrc.json";
+      console.log(`Set ${key} = ${value}  (${configPath})`);
+    } catch (err) {
+      console.error("Error:", err instanceof Error ? err.message : String(err));
+      process.exit(1);
+    }
+  });
+
+configCmd
+  .command("unset <key>")
+  .description("Remove a key from .ai-reviewrc.json")
+  .action((key: string) => {
+    if (!isConfigKey(key)) {
+      console.error(`Unknown config key "${key}". Valid keys: model, host, provider, maxTokens`);
+      process.exit(1);
+    }
+    const removed = unsetConfigValue(key);
+    if (removed) {
+      console.log(`Unset ${key} from config.`);
+    } else {
+      console.log(`"${key}" is not set in any config file — nothing to unset.`);
+    }
   });
 
 function die(err: unknown): never {
