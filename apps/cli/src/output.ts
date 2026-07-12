@@ -194,6 +194,14 @@ export function printHistoryStatsJson(stats: HistoryStats): void {
   process.stdout.write(JSON.stringify(stats, null, 2) + "\n");
 }
 
+export function printHistorySearchJson(results: StoredReview[]): void {
+  process.stdout.write(JSON.stringify(results, null, 2) + "\n");
+}
+
+export function printConfigJson(config: Record<string, unknown>, configFile: string | null): void {
+  process.stdout.write(JSON.stringify({ config, configFile }, null, 2) + "\n");
+}
+
 export interface HistoryStats {
   reviewCount: number;
   totalIssues: number;
