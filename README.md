@@ -58,6 +58,9 @@ node apps/cli/dist/index.js branch main
 # Review changes to a specific file
 node apps/cli/dist/index.js file src/app.ts
 
+# Review changes across multiple files in one pass (single AI call, one combined report)
+node apps/cli/dist/index.js file src/app.ts src/utils.ts
+
 # Save a Markdown report
 node apps/cli/dist/index.js staged --output review.md
 ```
