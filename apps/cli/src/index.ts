@@ -3,7 +3,8 @@ import { writeFileSync } from "node:fs";
 import { program } from "commander";
 import { reviewDiff, pingProvider } from "@ai-review/ai";
 import type { ReviewOptions, ReviewReport, ReviewSeverity } from "@ai-review/shared";
-import { getStagedDiff, getBranchDiff, getFileDiff } from "./git.js";
+import { getStagedDiff, getBranchDiff } from "./git.js";
+import { getFilesDiff } from "./multi-file-diff.js";
 import {
   printReport,
   printJson,
@@ -208,13 +209,21 @@ sharedOptions(
 });
 
 sharedOptions(
-  program.command("file <path>").description("Review unstaged or staged changes to a specific file")
-).action(async (filePath: string, opts: SharedOpts) => {
-  const diff = await getFileDiff(filePath).catch(die);
+  program
+    .command("file <paths...>")
+    .description("Review unstaged or staged changes to one or more specific files")
+).action(async (filePaths: string[], opts: SharedOpts) => {
+  const { diff, skipped } = await getFilesDiff(filePaths).catch(die);
+  if (skipped.length > 0 && !opts.json) {
+    console.error(`⚠ Skipped ${skipped.length} file(s) with no changes: ${skipped.join(", ")}`);
+  }
+  const reviewedPaths = filePaths.filter((p) => !skipped.includes(p));
+  const diffSource =
+    reviewedPaths.length === 1 ? `file: ${reviewedPaths[0]}` : `files: ${reviewedPaths.join(", ")}`;
   const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
   await runReview(
     diff,
-    `file: ${filePath}`,
+    diffSource,
     makeOpts(opts),
     opts.output,
     !!opts.json,
