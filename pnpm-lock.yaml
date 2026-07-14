@@ -71,18 +71,6 @@ importers:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@20.19.43)(vite@8.1.3(@types/node@20.19.43)(yaml@2.9.0))
 
-  packages/db:
-    devDependencies:
-      '@types/node':
-        specifier: ^20.0.0
-        version: 20.19.43
-      typescript:
-        specifier: ^5.4.5
-        version: 5.9.3
-      vitest:
-        specifier: ^4.1.10
-        version: 4.1.10(@types/node@20.19.43)(vite@8.1.3(@types/node@20.19.43)(yaml@2.9.0))
-
   packages/shared:
     devDependencies:
       typescript:

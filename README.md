@@ -87,7 +87,8 @@ node apps/cli/dist/index.js staged \
 - `apps/api`: optional review API (future)
 - `packages/ai`: model clients (Ollama + LM Studio) and review prompts
 - `packages/shared`: shared types — `ReviewReport`, `ReviewComment`, `ReviewSeverity`
-- `packages/db`: optional persisted review storage (future)
+
+Persisted review history lives directly in `apps/cli` (`history-store.ts`, backed by `~/.ai-review/history`) and is managed via the `history` subcommand.
 
 ## Local-first AI
 
