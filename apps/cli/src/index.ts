@@ -1,5 +1,7 @@
 #!/usr/bin/env node
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { program } from "commander";
 import { reviewDiff, pingProvider } from "@ai-review/ai";
 import type { ReviewOptions, ReviewReport, ReviewSeverity } from "@ai-review/shared";
@@ -20,6 +22,11 @@ import { loadConfig, getConfigFilePath, type AiReviewConfig } from "./config.js"
 import { buildDoctorReport, formatDoctorReport, formatDoctorJson } from "./doctor.js";
 
 const fileConfig: AiReviewConfig = loadConfig();
+
+const packageDir = dirname(fileURLToPath(import.meta.url));
+const { version: packageVersion } = JSON.parse(
+  readFileSync(join(packageDir, "..", "package.json"), "utf8")
+) as { version: string };
 
 const DEFAULT_HOST = process.env["AI_HOST"] ?? fileConfig.host ?? "http://localhost:11434";
 const DEFAULT_PROVIDER = (process.env["AI_PROVIDER"] ??
@@ -142,7 +149,7 @@ async function runReview(
 program
   .name("ai-review")
   .description("Local AI code review — powered by Ollama or LM Studio")
-  .version("0.1.0");
+  .version(packageVersion);
 
 const sharedOptions = (cmd: ReturnType<typeof program.command>) =>
   cmd
@@ -485,7 +492,11 @@ historyCmd
   .option("-n, --limit <number>", "Maximum results to show", "20")
   .action((query: string, opts: { limit: string }) => {
     const limit = parseInt(opts.limit, 10);
-    const results = store.search(query, { limit: isNaN(limit) ? 20 : limit });
+    if (isNaN(limit) || limit < 1) {
+      console.error(`Invalid --limit "${opts.limit}". Use a positive integer.`);
+      process.exit(1);
+    }
+    const results = store.search(query, { limit });
     if (results.length === 0) {
       console.log(`No reviews matching "${query}".`);
       return;
