@@ -133,7 +133,11 @@ export function formatDoctorJson(
     JSON.stringify(
       {
         ok: report.ok,
-        config: effectiveConfig,
+        config: {
+          model: effectiveConfig.model,
+          host: effectiveConfig.host,
+          provider: effectiveConfig.provider,
+        },
         checks: report.checks.map((c) => ({
           label: c.label,
           status: c.status,
