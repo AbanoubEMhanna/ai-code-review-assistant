@@ -203,4 +203,16 @@ describe("formatDoctorJson()", () => {
     const out = formatDoctorJson(report, defaultConfig);
     expect(out.endsWith("\n")).toBe(true);
   });
+
+  it("never includes the apiKey even when present on the config object", () => {
+    const configWithSecret = {
+      ...defaultConfig,
+      provider: "anthropic",
+      apiKey: "sk-ant-super-secret-key",
+    };
+    const report = buildDoctorReport("/cfg", configWithSecret, makePing({ provider: "anthropic" }));
+    const out = formatDoctorJson(report, configWithSecret);
+    expect(out).not.toContain("sk-ant-super-secret-key");
+    expect(JSON.parse(out).config).not.toHaveProperty("apiKey");
+  });
 });
