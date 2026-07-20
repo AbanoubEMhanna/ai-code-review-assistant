@@ -23,9 +23,7 @@ describe("summarizeBinaryChanges()", () => {
     ].join("\n");
     const result = summarizeBinaryChanges(diff);
     expect(result).toContain("diff --git a/logo.png b/logo.png");
-    expect(result).toContain(
-      "Binary file changed: logo.png (contents omitted — binary files are not reviewed)"
-    );
+    expect(result).toContain("(binary file contents omitted — binary files are not reviewed)");
     expect(result).not.toContain("Binary files a/logo.png and b/logo.png differ");
   });
 
@@ -38,10 +36,31 @@ describe("summarizeBinaryChanges()", () => {
       "some encoded bytes here",
     ].join("\n");
     const result = summarizeBinaryChanges(diff);
-    expect(result).toContain(
-      "Binary file changed: asset.bin (contents omitted — binary files are not reviewed)"
-    );
+    expect(result).toContain("(binary file contents omitted — binary files are not reviewed)");
     expect(result).not.toContain("some encoded bytes here");
+  });
+
+  it("summarizes a binary section whose path is quoted (spaces/special characters)", () => {
+    const diff = [
+      'diff --git "a/my file.png" "b/my file.png"',
+      "index 111..222 100644",
+      'Binary files "a/my file.png" and "b/my file.png" differ',
+    ].join("\n");
+    const result = summarizeBinaryChanges(diff);
+    expect(result).toContain('diff --git "a/my file.png" "b/my file.png"');
+    expect(result).toContain("(binary file contents omitted — binary files are not reviewed)");
+    expect(result).not.toContain('Binary files "a/my file.png" and "b/my file.png" differ');
+  });
+
+  it("summarizes a binary section under a custom diff.noprefix header", () => {
+    const diff = [
+      "diff --git logo.png logo.png",
+      "index 111..222 100644",
+      "Binary files logo.png and logo.png differ",
+    ].join("\n");
+    const result = summarizeBinaryChanges(diff);
+    expect(result).toContain("(binary file contents omitted — binary files are not reviewed)");
+    expect(result).not.toContain("Binary files logo.png and logo.png differ");
   });
 
   it("preserves text sections and summarizes only the binary ones in a mixed diff", () => {
@@ -67,9 +86,7 @@ describe("summarizeBinaryChanges()", () => {
     const result = summarizeBinaryChanges(diff);
     expect(result).toContain("-const x = 1;");
     expect(result).toContain("+const x = 2;");
-    expect(result).toContain(
-      "Binary file changed: logo.png (contents omitted — binary files are not reviewed)"
-    );
+    expect(result).toContain("(binary file contents omitted — binary files are not reviewed)");
     expect(result).not.toContain("Binary files a/logo.png and b/logo.png differ");
     expect(result).toContain("-old");
     expect(result).toContain("+new");
@@ -85,12 +102,8 @@ describe("summarizeBinaryChanges()", () => {
       "Binary files a/b.jpg and b/b.jpg differ",
     ].join("\n");
     const result = summarizeBinaryChanges(diff);
-    expect(result).toContain(
-      "Binary file changed: a.png (contents omitted — binary files are not reviewed)"
-    );
-    expect(result).toContain(
-      "Binary file changed: b.jpg (contents omitted — binary files are not reviewed)"
-    );
+    const matches = result.match(/\(binary file contents omitted/g);
+    expect(matches).toHaveLength(2);
   });
 
   it("returns an empty string for empty input", () => {

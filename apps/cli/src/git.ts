@@ -2,7 +2,7 @@ import { simpleGit } from "simple-git";
 
 const git = simpleGit();
 
-const DIFF_HEADER_RE = /^diff --git a\/(.+) b\/(.+)$/m;
+const DIFF_HEADER_RE = /^diff --git .*$/m;
 const BINARY_MARKER_RE = /^(?:Binary files .* differ|GIT binary patch)$/m;
 
 /**
@@ -10,6 +10,12 @@ const BINARY_MARKER_RE = /^(?:Binary files .* differ|GIT binary patch)$/m;
  * with a short summary line. Binary sections carry no reviewable content, so sending
  * them to the AI as-is only wastes tokens and invites hallucinated comments about
  * code the model never actually saw.
+ *
+ * The header regex intentionally only matches the "diff --git" line itself rather than
+ * trying to parse the file path out of it: git quotes paths containing spaces/special
+ * characters, and `diff.noprefix` changes the `a/`/`b/` prefixes, so any path-parsing
+ * regex here would be brittle and could silently fail to detect (and thus leak) a binary
+ * section it doesn't recognize.
  */
 export function summarizeBinaryChanges(diff: string): string {
   if (!diff) return diff;
@@ -17,13 +23,12 @@ export function summarizeBinaryChanges(diff: string): string {
   return sections
     .map((section) => {
       const header = DIFF_HEADER_RE.exec(section);
-      const filePath = header?.[2];
-      if (!header || filePath === undefined || !BINARY_MARKER_RE.test(section)) {
+      if (!header || !BINARY_MARKER_RE.test(section)) {
         return section;
       }
       const headerLine = header[0] ?? "";
       const trailingNewline = section.endsWith("\n") ? "\n" : "";
-      return `${headerLine}\nBinary file changed: ${filePath} (contents omitted — binary files are not reviewed)${trailingNewline}`;
+      return `${headerLine}\n(binary file contents omitted — binary files are not reviewed)${trailingNewline}`;
     })
     .join("");
 }
