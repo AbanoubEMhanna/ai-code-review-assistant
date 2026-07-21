@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { writeFileSync } from "node:fs";
 import { program } from "commander";
 import { reviewDiff, pingProvider } from "@ai-review/ai";
 import type { ReviewOptions, ReviewReport, ReviewSeverity } from "@ai-review/shared";
@@ -16,7 +15,13 @@ import {
 } from "./output.js";
 import type { HistoryStats } from "./output.js";
 import { ReviewHistoryStore } from "./history-store.js";
-import { loadConfig, getConfigFilePath, type AiReviewConfig } from "./config.js";
+import {
+  loadConfig,
+  getConfigFilePath,
+  initConfigFile,
+  ConfigFileExistsError,
+  type AiReviewConfig,
+} from "./config.js";
 import { buildDoctorReport, formatDoctorReport, formatDoctorJson } from "./doctor.js";
 
 const fileConfig: AiReviewConfig = loadConfig();
@@ -533,21 +538,29 @@ configCmd
 configCmd
   .command("init")
   .description("Create a .ai-reviewrc.json with the current defaults")
-  .action(() => {
-    const configPath = getConfigFilePath();
-    if (configPath) {
-      console.error(`Config file already exists: ${configPath}`);
-      console.error("Delete it first or edit it directly.");
-      process.exit(1);
-    }
+  .option("-f, --force", "Overwrite an existing config file")
+  .action((opts: { force?: boolean }) => {
     const defaults: AiReviewConfig = {
       model: DEFAULT_MODEL,
       host: DEFAULT_HOST,
       provider: DEFAULT_PROVIDER,
     };
-    writeFileSync(".ai-reviewrc.json", JSON.stringify(defaults, null, 2) + "\n", "utf8");
-    console.log("Created .ai-reviewrc.json with current defaults.");
-    console.log("Edit it to set your preferred model, host, and provider.");
+    try {
+      const { path, overwrote } = initConfigFile(defaults, { force: !!opts.force });
+      console.log(
+        overwrote
+          ? `Overwrote existing config file: ${path}`
+          : `Created ${path} with current defaults.`
+      );
+      console.log("Edit it to set your preferred model, host, and provider.");
+    } catch (err) {
+      if (err instanceof ConfigFileExistsError) {
+        console.error(err.message);
+        console.error("Delete it first, edit it directly, or re-run with --force to overwrite.");
+        process.exit(1);
+      }
+      throw err;
+    }
   });
 
 function die(err: unknown): never {

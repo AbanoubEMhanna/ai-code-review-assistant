@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 
@@ -50,9 +50,35 @@ export function loadConfig(): AiReviewConfig {
   return {};
 }
 
-export function getConfigFilePath(): string | null {
-  const projectPath = findProjectConfig(process.cwd());
+export function getConfigFilePath(cwd: string = process.cwd()): string | null {
+  const projectPath = findProjectConfig(cwd);
   if (projectPath) return projectPath;
   const globalPath = join(homedir(), CONFIG_FILE);
   return existsSync(globalPath) ? globalPath : null;
+}
+
+export class ConfigFileExistsError extends Error {
+  constructor(public readonly path: string) {
+    super(`Config file already exists: ${path}`);
+    this.name = "ConfigFileExistsError";
+  }
+}
+
+/**
+ * Writes a new .ai-reviewrc.json in `cwd`. Refuses to clobber an existing config
+ * (project-local or global) unless `force` is set, since the global config path
+ * doesn't necessarily match the local file being written.
+ */
+export function initConfigFile(
+  defaults: AiReviewConfig,
+  options: { force?: boolean; cwd?: string } = {}
+): { path: string; overwrote: boolean } {
+  const cwd = options.cwd ?? process.cwd();
+  const localPath = join(cwd, CONFIG_FILE);
+  const existingPath = getConfigFilePath(cwd);
+  if (existingPath && !options.force) {
+    throw new ConfigFileExistsError(existingPath);
+  }
+  writeFileSync(localPath, JSON.stringify(defaults, null, 2) + "\n", "utf8");
+  return { path: localPath, overwrote: existingPath === localPath };
 }
