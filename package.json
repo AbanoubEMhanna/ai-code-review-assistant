@@ -29,7 +29,8 @@
       "simple-git-hooks"
     ],
     "overrides": {
-      "vite": ">=7.3.5"
+      "vite": ">=7.3.5",
+      "brace-expansion": ">=1.1.16"
     }
   },
   "lint-staged": {
