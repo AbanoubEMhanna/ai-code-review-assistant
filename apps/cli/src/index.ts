@@ -394,7 +394,11 @@ historyCmd
       console.error(`Review "${id}" not found.`);
       process.exit(1);
     }
-    saveMarkdown(review, opts.output);
+    try {
+      saveMarkdown(review, opts.output);
+    } catch (err) {
+      die(err);
+    }
     console.log(`Exported to ${opts.output}`);
   });
 
@@ -545,7 +549,11 @@ configCmd
       host: DEFAULT_HOST,
       provider: DEFAULT_PROVIDER,
     };
-    writeFileSync(".ai-reviewrc.json", JSON.stringify(defaults, null, 2) + "\n", "utf8");
+    try {
+      writeFileSync(".ai-reviewrc.json", JSON.stringify(defaults, null, 2) + "\n", "utf8");
+    } catch (err) {
+      die(err);
+    }
     console.log("Created .ai-reviewrc.json with current defaults.");
     console.log("Edit it to set your preferred model, host, and provider.");
   });
