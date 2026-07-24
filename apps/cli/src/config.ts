@@ -11,11 +11,20 @@ export interface AiReviewConfig {
 
 const CONFIG_FILE = ".ai-reviewrc.json";
 
+// Bounded at the git repository root (or the home directory, whichever is hit
+// first) rather than walking all the way to the filesystem root. Otherwise a
+// `.ai-reviewrc.json` planted in an unrelated ancestor directory — e.g. a
+// shared parent folder on a CI runner or multi-tenant box — would be picked
+// up silently, and since `host` is read straight out of it, that lets an
+// attacker with write access to that ancestor redirect where diffs (source
+// code) get sent.
 function findProjectConfig(startDir: string): string | null {
+  const home = homedir();
   let dir = startDir;
   while (true) {
     const candidate = join(dir, CONFIG_FILE);
     if (existsSync(candidate)) return candidate;
+    if (dir === home || existsSync(join(dir, ".git"))) break;
     const parent = dirname(dir);
     if (parent === dir) break;
     dir = parent;
