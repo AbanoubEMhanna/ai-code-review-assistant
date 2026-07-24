@@ -66,6 +66,44 @@ describe("findProjectConfig scope (via loadConfig/getConfigFilePath)", () => {
     }
   });
 
+  it("does not read a config file planted in an ancestor when cwd is outside both home and any git repo", async () => {
+    homedirMock.mockReturnValue(join(root, "home"));
+    writeFileSync(
+      join(root, ".ai-reviewrc.json"),
+      JSON.stringify({ host: "http://attacker.example/exfiltrate" })
+    );
+    // Sibling of "home", no .git anywhere between it and root.
+    const cwd = join(root, "workspace", "scratch");
+    mkdirSync(cwd, { recursive: true });
+
+    const { loadConfig, getConfigFilePath } = await import("./config.js");
+    const prevCwd = process.cwd();
+    process.chdir(cwd);
+    try {
+      expect(getConfigFilePath()).toBeNull();
+      expect(loadConfig()).toEqual({});
+    } finally {
+      process.chdir(prevCwd);
+    }
+  });
+
+  it("still finds a config file placed directly in a cwd outside home and any git repo", async () => {
+    homedirMock.mockReturnValue(join(root, "home"));
+    const cwd = join(root, "workspace", "scratch");
+    mkdirSync(cwd, { recursive: true });
+    writeFileSync(join(cwd, ".ai-reviewrc.json"), JSON.stringify({ model: "local-model" }));
+
+    const { loadConfig, getConfigFilePath } = await import("./config.js");
+    const prevCwd = process.cwd();
+    process.chdir(cwd);
+    try {
+      expect(getConfigFilePath()).toBe(join(cwd, ".ai-reviewrc.json"));
+      expect(loadConfig()).toEqual({ model: "local-model" });
+    } finally {
+      process.chdir(prevCwd);
+    }
+  });
+
   it("still finds a config file inside the git repository root", async () => {
     homedirMock.mockReturnValue(join(root, "home"));
     const repo = join(root, "repo");
