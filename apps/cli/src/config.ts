@@ -11,16 +11,43 @@ export interface AiReviewConfig {
 
 const CONFIG_FILE = ".ai-reviewrc.json";
 
+// Finds the directory that bounds the config search: the nearest ancestor
+// (inclusive of startDir) that is either the home directory or a git
+// repository root. Returns null if neither is found before the filesystem
+// root — e.g. startDir is outside the home tree and not inside any git repo.
+function findSearchBoundary(startDir: string, home: string): string | null {
+  let dir = startDir;
+  while (true) {
+    if (dir === home || existsSync(join(dir, ".git"))) return dir;
+    const parent = dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+// Bounded at the git repository root (or the home directory, whichever is hit
+// first) rather than walking all the way to the filesystem root. Otherwise a
+// `.ai-reviewrc.json` planted in an unrelated ancestor directory — e.g. a
+// shared parent folder on a CI runner or multi-tenant box — would be picked
+// up silently, and since `host` is read straight out of it, that lets an
+// attacker with write access to that ancestor redirect where diffs (source
+// code) get sent. When startDir has no such boundary (outside the home tree,
+// not inside a git repo), only startDir itself is trusted — no ancestor is
+// checked at all.
 function findProjectConfig(startDir: string): string | null {
+  const home = homedir();
+  const boundary = findSearchBoundary(startDir, home);
+  if (boundary === null) {
+    const candidate = join(startDir, CONFIG_FILE);
+    return existsSync(candidate) ? candidate : null;
+  }
   let dir = startDir;
   while (true) {
     const candidate = join(dir, CONFIG_FILE);
     if (existsSync(candidate)) return candidate;
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
+    if (dir === boundary) return null;
+    dir = dirname(dir);
   }
-  return null;
 }
 
 function readConfigFile(filePath: string): AiReviewConfig {
