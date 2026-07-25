@@ -162,7 +162,7 @@ const sharedOptions = (cmd: ReturnType<typeof program.command>) =>
     .option("-k, --api-key <key>", "API key (Anthropic; or set ANTHROPIC_API_KEY env var)")
     .option(
       "-t, --max-tokens <number>",
-      "Maximum tokens for the AI response (default: 4096)",
+      `Maximum tokens for the AI response (default: ${DEFAULT_MAX_TOKENS ?? "4096"})`,
       DEFAULT_MAX_TOKENS
     )
     .option("-o, --output <file>", "Save Markdown report to file")
