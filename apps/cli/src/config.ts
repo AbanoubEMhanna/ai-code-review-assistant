@@ -50,6 +50,10 @@ export function loadConfig(): AiReviewConfig {
   return {};
 }
 
+export function resolveMaxTokensOption(cfg: AiReviewConfig): string | undefined {
+  return cfg.maxTokens !== undefined ? String(cfg.maxTokens) : undefined;
+}
+
 export function getConfigFilePath(): string | null {
   const projectPath = findProjectConfig(process.cwd());
   if (projectPath) return projectPath;
