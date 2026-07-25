@@ -23,6 +23,10 @@ function findProjectConfig(startDir: string): string | null {
   return null;
 }
 
+export function isPositiveInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0;
+}
+
 function readConfigFile(filePath: string): AiReviewConfig {
   try {
     const raw = readFileSync(filePath, "utf8");
@@ -33,7 +37,7 @@ function readConfigFile(filePath: string): AiReviewConfig {
     if (typeof obj["model"] === "string") cfg.model = obj["model"];
     if (typeof obj["host"] === "string") cfg.host = obj["host"];
     if (typeof obj["provider"] === "string") cfg.provider = obj["provider"];
-    if (typeof obj["maxTokens"] === "number") cfg.maxTokens = obj["maxTokens"];
+    if (isPositiveInteger(obj["maxTokens"])) cfg.maxTokens = obj["maxTokens"];
     return cfg;
   } catch {
     return {};
@@ -48,6 +52,10 @@ export function loadConfig(): AiReviewConfig {
   if (existsSync(globalPath)) return readConfigFile(globalPath);
 
   return {};
+}
+
+export function resolveMaxTokensOption(cfg: AiReviewConfig): string | undefined {
+  return cfg.maxTokens !== undefined ? String(cfg.maxTokens) : undefined;
 }
 
 export function getConfigFilePath(): string | null {

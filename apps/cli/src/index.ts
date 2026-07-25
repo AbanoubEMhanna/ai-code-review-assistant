@@ -16,7 +16,12 @@ import {
 } from "./output.js";
 import type { HistoryStats } from "./output.js";
 import { ReviewHistoryStore } from "./history-store.js";
-import { loadConfig, getConfigFilePath, type AiReviewConfig } from "./config.js";
+import {
+  loadConfig,
+  getConfigFilePath,
+  resolveMaxTokensOption,
+  type AiReviewConfig,
+} from "./config.js";
 import { buildDoctorReport, formatDoctorReport, formatDoctorJson } from "./doctor.js";
 
 const fileConfig: AiReviewConfig = loadConfig();
@@ -30,6 +35,7 @@ const DEFAULT_MODEL =
   fileConfig.model ??
   (DEFAULT_PROVIDER === "anthropic" ? "claude-sonnet-4-6" : "qwen3:latest");
 const DEFAULT_API_KEY = process.env["ANTHROPIC_API_KEY"];
+const DEFAULT_MAX_TOKENS = resolveMaxTokensOption(fileConfig);
 
 const SEVERITY_RANK: Record<ReviewSeverity, number> = {
   high: 3,
@@ -154,7 +160,11 @@ const sharedOptions = (cmd: ReturnType<typeof program.command>) =>
       DEFAULT_PROVIDER
     )
     .option("-k, --api-key <key>", "API key (Anthropic; or set ANTHROPIC_API_KEY env var)")
-    .option("-t, --max-tokens <number>", "Maximum tokens for the AI response (default: 4096)")
+    .option(
+      "-t, --max-tokens <number>",
+      `Maximum tokens for the AI response (default: ${DEFAULT_MAX_TOKENS ?? "4096"})`,
+      DEFAULT_MAX_TOKENS
+    )
     .option("-o, --output <file>", "Save Markdown report to file")
     .option("--json", "Output review as JSON (suppresses formatted output)")
     .option(
