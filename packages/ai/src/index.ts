@@ -4,3 +4,4 @@ export { pingProvider } from "./ping.js";
 export type { PingResult } from "./ping.js";
 export { parseReview } from "./parser.js";
 export type { RawReviewResult } from "./parser.js";
+export { estimateCostUsd } from "./pricing.js";

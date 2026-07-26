@@ -1,8 +1,15 @@
 import chalk from "chalk";
 import { writeFileSync } from "node:fs";
-import type { ReviewReport } from "@ai-review/shared";
+import type { ReviewReport, TokenUsage } from "@ai-review/shared";
 import type { PingResult } from "@ai-review/ai";
 import type { StoredReview } from "./history-store.js";
+
+function formatUsageLine(usage: TokenUsage): string {
+  const tokens = `${usage.inputTokens.toLocaleString()} in / ${usage.outputTokens.toLocaleString()} out tokens`;
+  const cost =
+    usage.estimatedCostUsd !== undefined ? `  ·  ~$${usage.estimatedCostUsd.toFixed(4)}` : "";
+  return `Usage: ${tokens}${cost}`;
+}
 
 const SEVERITY_COLORS = {
   high: chalk.red.bold,
@@ -39,6 +46,10 @@ export function printReport(report: ReviewReport): void {
   console.log(
     chalk.bold("Issues: ") + (parts.length ? parts.join(chalk.dim("  ·  ")) : chalk.green("none"))
   );
+
+  if (report.usage) {
+    console.log(chalk.dim(formatUsageLine(report.usage)));
+  }
 
   if (report.comments.length === 0) {
     console.log(chalk.green("\nNo issues found. "));
@@ -85,6 +96,10 @@ export function buildMarkdown(report: ReviewReport): string {
   lines.push(`| 🔵 Low | ${report.stats.low} |`);
   lines.push(`| ⚪ Info | ${report.stats.info} |`);
   lines.push(`| **Total** | **${report.stats.total}** |`);
+
+  if (report.usage) {
+    lines.push(`\n${formatUsageLine(report.usage)}`);
+  }
 
   if (report.comments.length === 0) {
     lines.push(`\n## Issues\n\nNo issues found.`);
@@ -201,6 +216,9 @@ export interface HistoryStats {
   byCategory: Record<string, number>;
   topSources: Array<{ source: string; count: number }>;
   avgIssuesPerReview: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalEstimatedCostUsd: number;
 }
 
 export function printHistoryStats(stats: HistoryStats): void {
@@ -231,6 +249,16 @@ export function printHistoryStats(stats: HistoryStats): void {
     console.log("\n" + chalk.bold("Top sources"));
     for (const { source, count } of stats.topSources) {
       console.log(`  ${chalk.dim("·")} ${source.padEnd(30)} ${count} review(s)`);
+    }
+  }
+
+  if (stats.totalInputTokens > 0 || stats.totalOutputTokens > 0) {
+    console.log("\n" + chalk.bold("Token usage"));
+    console.log(
+      `  ${chalk.dim("·")} ${stats.totalInputTokens.toLocaleString()} in / ${stats.totalOutputTokens.toLocaleString()} out tokens`
+    );
+    if (stats.totalEstimatedCostUsd > 0) {
+      console.log(`  ${chalk.dim("·")} ~$${stats.totalEstimatedCostUsd.toFixed(4)} estimated`);
     }
   }
   console.log();

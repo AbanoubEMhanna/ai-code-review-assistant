@@ -24,6 +24,9 @@ function makeStats(overrides: Partial<HistoryStats> = {}): HistoryStats {
     byCategory: { bug: 2, security: 1, performance: 2 },
     topSources: [{ source: "staged changes", count: 3 }],
     avgIssuesPerReview: 1.67,
+    totalInputTokens: 0,
+    totalOutputTokens: 0,
+    totalEstimatedCostUsd: 0,
     ...overrides,
   };
 }
@@ -124,6 +127,9 @@ describe("printHistoryStatsJson", () => {
       byCategory: {},
       topSources: [],
       avgIssuesPerReview: 0,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      totalEstimatedCostUsd: 0,
     });
 
     const parsed = JSON.parse(written[0] ?? "") as HistoryStats;

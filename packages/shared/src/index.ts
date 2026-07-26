@@ -9,6 +9,12 @@ export interface ReviewComment {
   suggestion?: string;
 }
 
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  estimatedCostUsd?: number;
+}
+
 export interface ReviewReport {
   generatedAt: string;
   model: string;
@@ -22,6 +28,7 @@ export interface ReviewReport {
     info: number;
     total: number;
   };
+  usage?: TokenUsage;
 }
 
 export interface ReviewOptions {
