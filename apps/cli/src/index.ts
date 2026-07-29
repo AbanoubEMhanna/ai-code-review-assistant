@@ -13,6 +13,7 @@ import {
   printHistoryStatsJson,
   printPingResult,
   saveMarkdown,
+  historyBadge,
 } from "./output.js";
 import type { HistoryStats } from "./output.js";
 import { ReviewHistoryStore } from "./history-store.js";
@@ -357,13 +358,7 @@ historyCmd
     }
     for (const r of reviews) {
       const date = new Date(r.generatedAt).toLocaleString();
-      const badge =
-        r.stats.high > 0
-          ? `🔴 ${r.stats.high}H`
-          : r.stats.medium > 0
-            ? `🟡 ${r.stats.medium}M`
-            : "✅";
-      console.log(`${r.id}  ${badge}  ${r.diffSource}  (${r.model}, ${date})`);
+      console.log(`${r.id}  ${historyBadge(r.stats)}  ${r.diffSource}  (${r.model}, ${date})`);
     }
   });
 
@@ -493,13 +488,7 @@ historyCmd
     console.log(`Found ${results.length} review(s) matching "${query}":\n`);
     for (const r of results) {
       const date = new Date(r.generatedAt).toLocaleString();
-      const badge =
-        r.stats.high > 0
-          ? `🔴 ${r.stats.high}H`
-          : r.stats.medium > 0
-            ? `🟡 ${r.stats.medium}M`
-            : "✅";
-      console.log(`${r.id}  ${badge}  ${r.diffSource}  (${r.model}, ${date})`);
+      console.log(`${r.id}  ${historyBadge(r.stats)}  ${r.diffSource}  (${r.model}, ${date})`);
     }
   });
 

@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { PingResult } from "@ai-review/ai";
-import { printPingJson, printPingResult } from "./output.js";
+import type { ReviewReport } from "@ai-review/shared";
+import { printPingJson, printPingResult, historyBadge } from "./output.js";
+
+function makeStats(overrides: Partial<ReviewReport["stats"]> = {}): ReviewReport["stats"] {
+  return { high: 0, medium: 0, low: 0, info: 0, total: 0, ...overrides };
+}
 
 function makePingResult(overrides: Partial<PingResult> = {}): PingResult {
   return {
@@ -17,6 +22,32 @@ function makePingResult(overrides: Partial<PingResult> = {}): PingResult {
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+describe("historyBadge", () => {
+  it("shows a green checkmark when there are no issues at all", () => {
+    expect(historyBadge(makeStats())).toBe("✅");
+  });
+
+  it("shows the low-severity count when only low issues are present", () => {
+    expect(historyBadge(makeStats({ low: 3 }))).toBe("🔵 3L");
+  });
+
+  it("shows the info-severity count when only info issues are present", () => {
+    expect(historyBadge(makeStats({ info: 2 }))).toBe("⚪ 2I");
+  });
+
+  it("prioritizes high over medium, low, and info", () => {
+    expect(historyBadge(makeStats({ high: 1, medium: 5, low: 5, info: 5 }))).toBe("🔴 1H");
+  });
+
+  it("prioritizes medium over low and info when there is no high", () => {
+    expect(historyBadge(makeStats({ medium: 1, low: 5, info: 5 }))).toBe("🟡 1M");
+  });
+
+  it("prioritizes low over info when there is no high or medium", () => {
+    expect(historyBadge(makeStats({ low: 1, info: 5 }))).toBe("🔵 1L");
+  });
 });
 
 describe("printPingJson", () => {

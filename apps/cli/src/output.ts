@@ -118,6 +118,14 @@ export function buildMarkdown(report: ReviewReport): string {
   return lines.join("\n");
 }
 
+export function historyBadge(stats: ReviewReport["stats"]): string {
+  if (stats.high > 0) return `🔴 ${stats.high}H`;
+  if (stats.medium > 0) return `🟡 ${stats.medium}M`;
+  if (stats.low > 0) return `🔵 ${stats.low}L`;
+  if (stats.info > 0) return `⚪ ${stats.info}I`;
+  return "✅";
+}
+
 export function printPingResult(result: PingResult): void {
   const providerLabel = chalk.bold(`${result.provider} @ ${result.host}`);
   console.log(`\nPinging ${providerLabel} (model: ${chalk.bold(result.model)})…\n`);
