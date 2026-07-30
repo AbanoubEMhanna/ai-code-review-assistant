@@ -485,7 +485,11 @@ historyCmd
   .option("-n, --limit <number>", "Maximum results to show", "20")
   .action((query: string, opts: { limit: string }) => {
     const limit = parseInt(opts.limit, 10);
-    const results = store.search(query, { limit: isNaN(limit) ? 20 : limit });
+    if (isNaN(limit) || limit < 1) {
+      console.error(`Invalid --limit "${opts.limit}". Use a positive integer.`);
+      process.exit(1);
+    }
+    const results = store.search(query, { limit });
     if (results.length === 0) {
       console.log(`No reviews matching "${query}".`);
       return;
