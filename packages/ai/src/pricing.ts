@@ -7,7 +7,12 @@ interface ModelPrice {
   outputPerMillion: number;
 }
 
+// Version-specific entries are listed before family-wide fallbacks — the first match wins,
+// so put newer/cheaper or newer/pricier model IDs ahead of the generic "-opus/-sonnet/-haiku"
+// patterns they'd otherwise also match.
 const ANTHROPIC_PRICES: ModelPrice[] = [
+  { match: /^claude-3-haiku/i, inputPerMillion: 0.25, outputPerMillion: 1.25 },
+  { match: /^claude-haiku-4-5/i, inputPerMillion: 1, outputPerMillion: 5 },
   { match: /claude-.*opus/i, inputPerMillion: 15, outputPerMillion: 75 },
   { match: /claude-.*sonnet/i, inputPerMillion: 3, outputPerMillion: 15 },
   { match: /claude-.*haiku/i, inputPerMillion: 0.8, outputPerMillion: 4 },
