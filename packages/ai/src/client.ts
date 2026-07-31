@@ -1,6 +1,12 @@
-import type { ReviewComment, ReviewOptions } from "@ai-review/shared";
+import type { ReviewComment, ReviewOptions, TokenUsage } from "@ai-review/shared";
 import { SYSTEM_PROMPT, buildUserPrompt } from "./prompts.js";
 import { parseReview } from "./parser.js";
+import { estimateCostUsd } from "./pricing.js";
+
+interface ChatResult {
+  content: string;
+  usage?: { inputTokens: number; outputTokens: number };
+}
 
 async function fetchWithTimeout(
   url: string,
@@ -22,7 +28,7 @@ async function anthropicChat(
   systemPrompt: string,
   userMessage: string,
   maxTokens: number
-): Promise<string> {
+): Promise<ChatResult> {
   const res = await fetchWithTimeout(
     "https://api.anthropic.com/v1/messages",
     {
@@ -47,10 +53,14 @@ async function anthropicChat(
   }
   const data = (await res.json()) as {
     content: Array<{ type: string; text: string }>;
+    usage?: { input_tokens: number; output_tokens: number };
   };
   const content = data.content.find((c) => c.type === "text")?.text;
   if (!content) throw new Error("Empty response from Anthropic");
-  return content;
+  const usage = data.usage
+    ? { inputTokens: data.usage.input_tokens, outputTokens: data.usage.output_tokens }
+    : undefined;
+  return { content, ...(usage ? { usage } : {}) };
 }
 
 async function chatCompletions(
@@ -58,7 +68,7 @@ async function chatCompletions(
   model: string,
   messages: Array<{ role: string; content: string }>,
   maxTokens: number
-): Promise<string> {
+): Promise<ChatResult> {
   const url = `${host}/v1/chat/completions`;
   const res = await fetchWithTimeout(url, {
     method: "POST",
@@ -71,10 +81,14 @@ async function chatCompletions(
   }
   const data = (await res.json()) as {
     choices: Array<{ message: { content: string } }>;
+    usage?: { prompt_tokens: number; completion_tokens: number };
   };
   const content = data.choices[0]?.message?.content;
   if (!content) throw new Error("Empty response from AI");
-  return content;
+  const usage = data.usage
+    ? { inputTokens: data.usage.prompt_tokens, outputTokens: data.usage.completion_tokens }
+    : undefined;
+  return { content, ...(usage ? { usage } : {}) };
 }
 
 async function ollamaChat(
@@ -82,7 +96,7 @@ async function ollamaChat(
   model: string,
   messages: Array<{ role: string; content: string }>,
   maxTokens: number
-): Promise<string> {
+): Promise<ChatResult> {
   const url = `${host}/api/chat`;
   const res = await fetchWithTimeout(url, {
     method: "POST",
@@ -98,16 +112,24 @@ async function ollamaChat(
     const text = await res.text();
     throw new Error(`Ollama request failed (${res.status}): ${text}`);
   }
-  const data = (await res.json()) as { message: { content: string } };
+  const data = (await res.json()) as {
+    message: { content: string };
+    prompt_eval_count?: number;
+    eval_count?: number;
+  };
   if (!data.message?.content) throw new Error("Empty response from Ollama");
-  return data.message.content;
+  const usage =
+    data.prompt_eval_count != null && data.eval_count != null
+      ? { inputTokens: data.prompt_eval_count, outputTokens: data.eval_count }
+      : undefined;
+  return { content: data.message.content, ...(usage ? { usage } : {}) };
 }
 
 export async function reviewDiff(
   diff: string,
   diffSource: string,
   opts: ReviewOptions
-): Promise<{ summary: string; comments: ReviewComment[] }> {
+): Promise<{ summary: string; comments: ReviewComment[]; usage?: TokenUsage }> {
   if (!diff.trim()) {
     return { summary: "No changes to review.", comments: [] };
   }
@@ -118,14 +140,14 @@ export async function reviewDiff(
   ];
   const maxTokens = opts.maxTokens ?? 4096;
 
-  let raw: string;
+  let result: ChatResult;
   if (opts.provider === "anthropic") {
     if (!opts.apiKey) {
       throw new Error(
         "Anthropic provider requires an API key. Set ANTHROPIC_API_KEY or use --api-key."
       );
     }
-    raw = await anthropicChat(
+    result = await anthropicChat(
       opts.apiKey,
       opts.model,
       SYSTEM_PROMPT,
@@ -133,17 +155,17 @@ export async function reviewDiff(
       maxTokens
     );
   } else if (opts.provider === "lmstudio") {
-    raw = await chatCompletions(opts.host, opts.model, messages, maxTokens);
+    result = await chatCompletions(opts.host, opts.model, messages, maxTokens);
   } else {
     try {
-      raw = await ollamaChat(opts.host, opts.model, messages, maxTokens);
+      result = await ollamaChat(opts.host, opts.model, messages, maxTokens);
     } catch {
       // Fall back to OpenAI-compatible endpoint (Ollama also supports this)
-      raw = await chatCompletions(opts.host, opts.model, messages, maxTokens);
+      result = await chatCompletions(opts.host, opts.model, messages, maxTokens);
     }
   }
 
-  const parsed = parseReview(raw);
+  const parsed = parseReview(result.content);
 
   const comments: ReviewComment[] = parsed.comments.map((c) => ({
     file: c.file,
@@ -154,5 +176,20 @@ export async function reviewDiff(
     ...(c.suggestion != null ? { suggestion: c.suggestion } : {}),
   }));
 
-  return { summary: parsed.summary, comments };
+  if (!result.usage) {
+    return { summary: parsed.summary, comments };
+  }
+
+  const estimatedCostUsd = estimateCostUsd(
+    opts.provider,
+    opts.model,
+    result.usage.inputTokens,
+    result.usage.outputTokens
+  );
+  const usage: TokenUsage = {
+    ...result.usage,
+    ...(estimatedCostUsd !== undefined ? { estimatedCostUsd } : {}),
+  };
+
+  return { summary: parsed.summary, comments, usage };
 }

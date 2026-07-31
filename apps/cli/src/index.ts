@@ -90,7 +90,7 @@ async function runReview(
   if (!json) {
     console.log(`Reviewing ${diffSource} with ${opts.model} via ${opts.provider} (${opts.host})…`);
   }
-  const { summary, comments } = await reviewDiff(diff, diffSource, opts);
+  const { summary, comments, usage } = await reviewDiff(diff, diffSource, opts);
 
   const stats = {
     high: comments.filter((c) => c.severity === "high").length,
@@ -107,6 +107,7 @@ async function runReview(
     summary,
     comments,
     stats,
+    ...(usage ? { usage } : {}),
   };
 
   if (json) {
@@ -414,6 +415,9 @@ historyCmd
           byCategory: {},
           topSources: [],
           avgIssuesPerReview: 0,
+          totalInputTokens: 0,
+          totalOutputTokens: 0,
+          totalEstimatedCostUsd: 0,
         });
       } else {
         console.log("No saved reviews.");
@@ -424,6 +428,9 @@ historyCmd
     const bySeverity = { high: 0, medium: 0, low: 0, info: 0 };
     const byCategory: Record<string, number> = {};
     const sourceCounts: Record<string, number> = {};
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
+    let totalEstimatedCostUsd = 0;
 
     for (const r of reviews) {
       bySeverity.high += r.stats.high;
@@ -433,6 +440,11 @@ historyCmd
       sourceCounts[r.diffSource] = (sourceCounts[r.diffSource] ?? 0) + 1;
       for (const c of r.comments) {
         byCategory[c.category] = (byCategory[c.category] ?? 0) + 1;
+      }
+      if (r.usage) {
+        totalInputTokens += r.usage.inputTokens;
+        totalOutputTokens += r.usage.outputTokens;
+        totalEstimatedCostUsd += r.usage.estimatedCostUsd ?? 0;
       }
     }
 
@@ -449,6 +461,9 @@ historyCmd
       byCategory,
       topSources,
       avgIssuesPerReview: reviews.length > 0 ? totalIssues / reviews.length : 0,
+      totalInputTokens,
+      totalOutputTokens,
+      totalEstimatedCostUsd,
     };
 
     if (opts.json) {

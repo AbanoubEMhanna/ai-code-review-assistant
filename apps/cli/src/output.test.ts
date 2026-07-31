@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { PingResult } from "@ai-review/ai";
-import { printPingJson, printPingResult } from "./output.js";
+import type { ReviewReport } from "@ai-review/shared";
+import { printPingJson, printPingResult, buildMarkdown } from "./output.js";
 
 function makePingResult(overrides: Partial<PingResult> = {}): PingResult {
   return {
@@ -142,5 +143,39 @@ describe("printPingResult — human-readable output", () => {
 
     const joined = lines.join("\n");
     expect(joined).not.toContain("ollama pull");
+  });
+});
+
+function makeReport(overrides: Partial<ReviewReport> = {}): ReviewReport {
+  return {
+    generatedAt: "2026-01-01T00:00:00.000Z",
+    model: "claude-sonnet-4-6",
+    diffSource: "staged changes",
+    summary: "Looks good.",
+    comments: [],
+    stats: { high: 0, medium: 0, low: 0, info: 0, total: 0 },
+    ...overrides,
+  };
+}
+
+describe("buildMarkdown — token usage", () => {
+  it("omits the usage line when no usage data is present", () => {
+    const md = buildMarkdown(makeReport());
+    expect(md).not.toContain("Usage:");
+  });
+
+  it("includes token counts and estimated cost when usage is present", () => {
+    const md = buildMarkdown(
+      makeReport({ usage: { inputTokens: 1200, outputTokens: 300, estimatedCostUsd: 0.0081 } })
+    );
+    expect(md).toContain("Usage:");
+    expect(md).toContain("1,200 in / 300 out tokens");
+    expect(md).toContain("$0.0081");
+  });
+
+  it("omits the cost figure when the model has no known price", () => {
+    const md = buildMarkdown(makeReport({ usage: { inputTokens: 1200, outputTokens: 300 } }));
+    expect(md).toContain("1,200 in / 300 out tokens");
+    expect(md).not.toContain("$");
   });
 });
