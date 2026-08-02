@@ -59,6 +59,26 @@ describe("getCommitDiff()", () => {
     await expect(getCommitDiff("not-a-real-ref", dir)).rejects.toThrow(/not found/);
   });
 
+  it("propagates a diff failure instead of silently falling back to the empty tree when a parent exists", async () => {
+    const git = simpleGit(dir);
+    writeFileSync(join(dir, "a.txt"), "one\n");
+    await git.add(".");
+    const first = await git.commit("first");
+
+    writeFileSync(join(dir, "a.txt"), "one\ntwo\n");
+    await git.add(".");
+    const second = await git.commit("second");
+
+    // Simulate a parent whose content is unavailable locally (e.g. a shallow
+    // or partial clone) by deleting the parent's blob object. The commit
+    // still has a parent, so this must surface as an error rather than
+    // silently substituting the empty-tree (full contents) diff.
+    const blobSha = (await git.raw(["rev-parse", `${first.commit}:a.txt`])).trim();
+    rmSync(join(dir, ".git", "objects", blobSha.slice(0, 2), blobSha.slice(2)));
+
+    await expect(getCommitDiff(second.commit, dir)).rejects.toThrow();
+  });
+
   it("throws when the commit introduces no changes", async () => {
     const git = simpleGit(dir);
     writeFileSync(join(dir, "a.txt"), "hello\n");

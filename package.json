@@ -29,7 +29,10 @@
       "simple-git-hooks"
     ],
     "overrides": {
-      "vite": ">=7.3.5"
+      "vite": ">=7.3.5",
+      "postcss": ">=8.5.18",
+      "minimatch@3>brace-expansion": "^1.1.17",
+      "minimatch@10>brace-expansion": "^5.0.8"
     }
   },
   "lint-staged": {

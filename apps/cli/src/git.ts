@@ -38,13 +38,17 @@ export async function getCommitDiff(sha: string, cwd?: string): Promise<string> 
     throw new Error(`Commit "${sha}" not found.`);
   }
 
-  let diff: string;
+  let hasParent = true;
   try {
-    diff = await scopedGit.diff([`${resolvedSha}~1`, resolvedSha]);
+    await scopedGit.revparse([`${resolvedSha}~1`]);
   } catch {
-    // No parent commit (root commit) — diff against the empty tree instead.
-    diff = await scopedGit.diff([EMPTY_TREE_SHA, resolvedSha]);
+    // No parent commit — this is a root commit.
+    hasParent = false;
   }
+
+  const diff = hasParent
+    ? await scopedGit.diff([`${resolvedSha}~1`, resolvedSha])
+    : await scopedGit.diff([EMPTY_TREE_SHA, resolvedSha]);
 
   if (!diff.trim()) {
     throw new Error(`No changes found in commit "${sha}".`);
