@@ -58,6 +58,9 @@ node apps/cli/dist/index.js branch main
 # Review changes to a specific file
 node apps/cli/dist/index.js file src/app.ts
 
+# Review the changes introduced by a specific commit
+node apps/cli/dist/index.js commit abc1234
+
 # Save a Markdown report
 node apps/cli/dist/index.js staged --output review.md
 ```
