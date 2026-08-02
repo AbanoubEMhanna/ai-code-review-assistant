@@ -2,6 +2,10 @@ import { simpleGit } from "simple-git";
 
 const git = simpleGit();
 
+// Git's well-known hash for an empty tree — diffing against it yields the
+// full contents of a commit that has no parent (e.g. a repo's root commit).
+const EMPTY_TREE_SHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+
 export async function getStagedDiff(): Promise<string> {
   const diff = await git.diff(["--cached"]);
   if (!diff.trim()) {
@@ -20,6 +24,34 @@ export async function getBranchDiff(base: string): Promise<string> {
   const diff = await git.diff([`${base}...HEAD`]);
   if (!diff.trim()) {
     throw new Error(`No differences found between "${base}" and HEAD.`);
+  }
+  return diff;
+}
+
+export async function getCommitDiff(sha: string, cwd?: string): Promise<string> {
+  const scopedGit = cwd ? simpleGit(cwd) : git;
+
+  let resolvedSha: string;
+  try {
+    resolvedSha = (await scopedGit.revparse([sha])).trim();
+  } catch {
+    throw new Error(`Commit "${sha}" not found.`);
+  }
+
+  let hasParent = true;
+  try {
+    await scopedGit.revparse([`${resolvedSha}~1`]);
+  } catch {
+    // No parent commit — this is a root commit.
+    hasParent = false;
+  }
+
+  const diff = hasParent
+    ? await scopedGit.diff([`${resolvedSha}~1`, resolvedSha])
+    : await scopedGit.diff([EMPTY_TREE_SHA, resolvedSha]);
+
+  if (!diff.trim()) {
+    throw new Error(`No changes found in commit "${sha}".`);
   }
   return diff;
 }

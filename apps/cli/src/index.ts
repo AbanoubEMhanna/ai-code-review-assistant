@@ -3,7 +3,7 @@ import { writeFileSync } from "node:fs";
 import { program } from "commander";
 import { reviewDiff, pingProvider } from "@ai-review/ai";
 import type { ReviewOptions, ReviewReport, ReviewSeverity } from "@ai-review/shared";
-import { getStagedDiff, getBranchDiff, getFileDiff } from "./git.js";
+import { getStagedDiff, getBranchDiff, getFileDiff, getCommitDiff } from "./git.js";
 import {
   printReport,
   printJson,
@@ -215,6 +215,22 @@ sharedOptions(
   await runReview(
     diff,
     `file: ${filePath}`,
+    makeOpts(opts),
+    opts.output,
+    !!opts.json,
+    failOn,
+    !opts.save
+  ).catch(die);
+});
+
+sharedOptions(
+  program.command("commit <sha>").description("Review the changes introduced by a specific commit")
+).action(async (sha: string, opts: SharedOpts) => {
+  const diff = await getCommitDiff(sha).catch(die);
+  const failOn = opts.failOn !== undefined ? parseFailOn(opts.failOn) : undefined;
+  await runReview(
+    diff,
+    `commit: ${sha}`,
     makeOpts(opts),
     opts.output,
     !!opts.json,
