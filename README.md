@@ -80,6 +80,20 @@ node apps/cli/dist/index.js staged \
   --model "lmstudio-community/qwen3-8b"
 ```
 
+## GitHub Actions
+
+Run reviews in CI as a step in your workflow — see [docs/github-action.md](docs/github-action.md).
+
+```yaml
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0
+- uses: AbanoubEMhanna/ai-code-review-assistant@main
+  with:
+    base: ${{ github.event.pull_request.base.ref }}
+    api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
 ## Monorepo Layout
 
 - `apps/cli`: TypeScript CLI — the main entry point

@@ -10,4 +10,4 @@
 
 - Add rules for security, performance, tests, and maintainability.
 - Add optional web dashboard and persisted review history.
-- Add GitHub Actions integration later.
+- ~~Add GitHub Actions integration later.~~ Done — see [github-action.md](github-action.md).

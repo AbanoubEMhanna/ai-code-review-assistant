@@ -1,0 +1,102 @@
+name: "AI Code Review Assistant"
+description: "Review a pull request's diff with a local or hosted AI model and optionally fail the job on high-severity findings."
+author: "ai-code-review-assistant"
+
+branding:
+  icon: "check-circle"
+  color: "purple"
+
+inputs:
+  base:
+    description: "Base ref to diff HEAD against (typically the PR base branch)."
+    required: false
+    default: "main"
+  provider:
+    description: "AI provider: ollama | lmstudio | anthropic."
+    required: false
+    default: "anthropic"
+  model:
+    description: "Model name to use."
+    required: false
+    default: "claude-sonnet-4-6"
+  host:
+    description: "AI host URL (only used for the ollama/lmstudio providers)."
+    required: false
+    default: "http://localhost:11434"
+  api-key:
+    description: "API key for the anthropic provider. Required when provider is anthropic."
+    required: false
+    default: ""
+  max-tokens:
+    description: "Maximum tokens for the AI response."
+    required: false
+    default: ""
+  fail-on:
+    description: "Fail the job if any issue at this severity or above is found: high | medium | low | info. Leave empty to never fail on findings."
+    required: false
+    default: "high"
+  output:
+    description: "Path (relative to the workspace) to write the Markdown report to."
+    required: false
+    default: "ai-review-report.md"
+
+outputs:
+  report-path:
+    description: "Path to the generated Markdown report."
+    value: ${{ steps.review.outputs.report-path }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        package_json_file: ${{ github.action_path }}/package.json
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: "22"
+        cache: "pnpm"
+        cache-dependency-path: ${{ github.action_path }}/pnpm-lock.yaml
+
+    - name: Install action dependencies
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: pnpm install --frozen-lockfile
+
+    - name: Build CLI
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: pnpm --filter @ai-review/cli... build
+
+    - name: Run review
+      id: review
+      shell: bash
+      env:
+        AI_REVIEW_BASE: ${{ inputs.base }}
+        AI_REVIEW_PROVIDER: ${{ inputs.provider }}
+        AI_REVIEW_MODEL: ${{ inputs.model }}
+        AI_REVIEW_HOST: ${{ inputs.host }}
+        AI_REVIEW_API_KEY: ${{ inputs.api-key }}
+        AI_REVIEW_MAX_TOKENS: ${{ inputs.max-tokens }}
+        AI_REVIEW_FAIL_ON: ${{ inputs.fail-on }}
+        AI_REVIEW_OUTPUT: ${{ inputs.output }}
+      run: |
+        set -euo pipefail
+        args=(branch "$AI_REVIEW_BASE" \
+          --provider "$AI_REVIEW_PROVIDER" \
+          --model "$AI_REVIEW_MODEL" \
+          --host "$AI_REVIEW_HOST" \
+          --output "$AI_REVIEW_OUTPUT")
+        if [ -n "$AI_REVIEW_API_KEY" ]; then
+          args+=(--api-key "$AI_REVIEW_API_KEY")
+        fi
+        if [ -n "$AI_REVIEW_MAX_TOKENS" ]; then
+          args+=(--max-tokens "$AI_REVIEW_MAX_TOKENS")
+        fi
+        if [ -n "$AI_REVIEW_FAIL_ON" ]; then
+          args+=(--fail-on "$AI_REVIEW_FAIL_ON")
+        fi
+        echo "report-path=$AI_REVIEW_OUTPUT" >> "$GITHUB_OUTPUT"
+        node "${{ github.action_path }}/apps/cli/dist/index.js" "${args[@]}"
