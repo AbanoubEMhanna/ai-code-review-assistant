@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 
@@ -8,6 +8,9 @@ export interface AiReviewConfig {
   provider?: string;
   maxTokens?: number;
 }
+
+export const CONFIG_KEYS = ["model", "host", "provider", "maxTokens"] as const;
+export type ConfigKey = (typeof CONFIG_KEYS)[number];
 
 const CONFIG_FILE = ".ai-reviewrc.json";
 
@@ -55,4 +58,21 @@ export function getConfigFilePath(): string | null {
   if (projectPath) return projectPath;
   const globalPath = join(homedir(), CONFIG_FILE);
   return existsSync(globalPath) ? globalPath : null;
+}
+
+export function writeConfigValue(filePath: string, key: ConfigKey, value: string | number): void {
+  let existing: Record<string, unknown> = {};
+  if (existsSync(filePath)) {
+    try {
+      const raw = readFileSync(filePath, "utf8");
+      const parsed = JSON.parse(raw) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        existing = parsed as Record<string, unknown>;
+      }
+    } catch {
+      // Corrupt/unreadable config: overwrite it rather than losing the update.
+    }
+  }
+  existing[key] = value;
+  writeFileSync(filePath, JSON.stringify(existing, null, 2) + "\n", "utf8");
 }

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { program } from "commander";
 import { reviewDiff, pingProvider } from "@ai-review/ai";
 import type { ReviewOptions, ReviewReport, ReviewSeverity } from "@ai-review/shared";
@@ -16,7 +17,14 @@ import {
 } from "./output.js";
 import type { HistoryStats } from "./output.js";
 import { ReviewHistoryStore } from "./history-store.js";
-import { loadConfig, getConfigFilePath, type AiReviewConfig } from "./config.js";
+import {
+  loadConfig,
+  getConfigFilePath,
+  writeConfigValue,
+  CONFIG_KEYS,
+  type AiReviewConfig,
+  type ConfigKey,
+} from "./config.js";
 import { buildDoctorReport, formatDoctorReport, formatDoctorJson } from "./doctor.js";
 
 const fileConfig: AiReviewConfig = loadConfig();
@@ -548,6 +556,39 @@ configCmd
     writeFileSync(".ai-reviewrc.json", JSON.stringify(defaults, null, 2) + "\n", "utf8");
     console.log("Created .ai-reviewrc.json with current defaults.");
     console.log("Edit it to set your preferred model, host, and provider.");
+  });
+
+configCmd
+  .command("set <key> <value>")
+  .description(`Set a single value in .ai-reviewrc.json (${CONFIG_KEYS.join(", ")})`)
+  .action((key: string, value: string) => {
+    if (!(CONFIG_KEYS as readonly string[]).includes(key)) {
+      die(new Error(`Unknown config key "${key}". Valid keys: ${CONFIG_KEYS.join(", ")}.`));
+    }
+    const configKey = key as ConfigKey;
+
+    let finalValue: string | number = value;
+    if (configKey === "provider") {
+      const normalized = value.trim().toLowerCase();
+      if (normalized !== "ollama" && normalized !== "lmstudio" && normalized !== "anthropic") {
+        die(new Error(`Invalid provider "${value}". Use "ollama", "lmstudio", or "anthropic".`));
+      }
+      finalValue = normalized;
+    } else if (configKey === "maxTokens") {
+      const n = parseInt(value, 10);
+      if (isNaN(n) || n < 1) {
+        die(new Error(`maxTokens must be a positive integer, got "${value}".`));
+      }
+      finalValue = n;
+    }
+
+    const configPath = getConfigFilePath() ?? join(process.cwd(), ".ai-reviewrc.json");
+    try {
+      writeConfigValue(configPath, configKey, finalValue);
+    } catch (err) {
+      die(err);
+    }
+    console.log(`Set ${configKey} = ${finalValue} in ${configPath}`);
   });
 
 function die(err: unknown): never {
