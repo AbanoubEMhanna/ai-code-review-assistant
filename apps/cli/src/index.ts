@@ -575,11 +575,10 @@ configCmd
       }
       finalValue = normalized;
     } else if (configKey === "maxTokens") {
-      const n = parseInt(value, 10);
-      if (isNaN(n) || n < 1) {
+      if (!/^\d+$/.test(value.trim()) || parseInt(value, 10) < 1) {
         die(new Error(`maxTokens must be a positive integer, got "${value}".`));
       }
-      finalValue = n;
+      finalValue = parseInt(value, 10);
     }
 
     const configPath = getConfigFilePath() ?? join(process.cwd(), ".ai-reviewrc.json");
