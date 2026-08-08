@@ -93,6 +93,28 @@ export class ReviewHistoryStore {
     return count;
   }
 
+  prune(opts: { maxAgeDays?: number; keep?: number } = {}): number {
+    const all = this.list();
+    const idsToDelete = new Set<string>();
+
+    if (opts.maxAgeDays !== undefined) {
+      const cutoff = Date.now() - opts.maxAgeDays * 24 * 60 * 60 * 1000;
+      for (const r of all) {
+        if (new Date(r.generatedAt).getTime() < cutoff) idsToDelete.add(r.id);
+      }
+    }
+
+    if (opts.keep !== undefined && opts.keep >= 0 && all.length > opts.keep) {
+      for (const r of all.slice(opts.keep)) idsToDelete.add(r.id);
+    }
+
+    let count = 0;
+    for (const id of idsToDelete) {
+      if (this.delete(id)) count++;
+    }
+    return count;
+  }
+
   search(query: string, opts: { limit?: number } = {}): StoredReview[] {
     const terms = query
       .toLowerCase()

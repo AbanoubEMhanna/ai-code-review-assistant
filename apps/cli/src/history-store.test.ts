@@ -118,3 +118,57 @@ describe("ReviewHistoryStore.search()", () => {
     expect(store.search("anything")).toHaveLength(0);
   });
 });
+
+describe("ReviewHistoryStore.prune()", () => {
+  it("does nothing when no options are given", () => {
+    store.save(makeReport());
+    store.save(makeReport());
+    expect(store.prune()).toBe(0);
+    expect(store.list()).toHaveLength(2);
+  });
+
+  it("deletes reviews older than maxAgeDays", () => {
+    const old = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString();
+    const recent = new Date().toISOString();
+    store.save(makeReport({ generatedAt: old, summary: "old" }));
+    store.save(makeReport({ generatedAt: recent, summary: "recent" }));
+
+    const removed = store.prune({ maxAgeDays: 30 });
+
+    expect(removed).toBe(1);
+    const remaining = store.list();
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]?.summary).toBe("recent");
+  });
+
+  it("keeps only the N most recent reviews when keep is set", () => {
+    for (let i = 0; i < 5; i++) {
+      store.save(makeReport());
+    }
+    const removed = store.prune({ keep: 2 });
+    expect(removed).toBe(3);
+    expect(store.list()).toHaveLength(2);
+  });
+
+  it("does not delete anything when keep is >= total review count", () => {
+    store.save(makeReport());
+    store.save(makeReport());
+    expect(store.prune({ keep: 10 })).toBe(0);
+    expect(store.list()).toHaveLength(2);
+  });
+
+  it("combines maxAgeDays and keep without double counting overlaps", () => {
+    const old = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString();
+    store.save(makeReport({ generatedAt: old }));
+    for (let i = 0; i < 3; i++) {
+      store.save(makeReport());
+    }
+    const removed = store.prune({ maxAgeDays: 30, keep: 2 });
+    expect(removed).toBe(2);
+    expect(store.list()).toHaveLength(2);
+  });
+
+  it("returns 0 when store is empty", () => {
+    expect(store.prune({ maxAgeDays: 1, keep: 0 })).toBe(0);
+  });
+});
