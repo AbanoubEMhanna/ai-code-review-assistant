@@ -13,6 +13,7 @@ import {
   printHistoryStatsJson,
   printPingResult,
   saveMarkdown,
+  saveJson,
 } from "./output.js";
 import type { HistoryStats } from "./output.js";
 import { ReviewHistoryStore } from "./history-store.js";
@@ -386,15 +387,25 @@ historyCmd
 
 historyCmd
   .command("export <id>")
-  .description("Export a saved review as Markdown")
+  .description("Export a saved review as Markdown or JSON")
   .requiredOption("-o, --output <file>", "Output file path")
-  .action((id: string, opts: { output: string }) => {
+  .option("-f, --format <format>", "Output format: markdown | json", "markdown")
+  .action((id: string, opts: { output: string; format: string }) => {
+    const format = opts.format.trim().toLowerCase();
+    if (format !== "markdown" && format !== "json") {
+      console.error(`Invalid --format "${opts.format}". Use "markdown" or "json".`);
+      process.exit(1);
+    }
     const review = store.get(id);
     if (!review) {
       console.error(`Review "${id}" not found.`);
       process.exit(1);
     }
-    saveMarkdown(review, opts.output);
+    if (format === "json") {
+      saveJson(review, opts.output);
+    } else {
+      saveMarkdown(review, opts.output);
+    }
     console.log(`Exported to ${opts.output}`);
   });
 

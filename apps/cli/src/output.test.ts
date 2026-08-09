@@ -1,6 +1,22 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import type { PingResult } from "@ai-review/ai";
-import { printPingJson, printPingResult } from "./output.js";
+import type { ReviewReport } from "@ai-review/shared";
+import { printPingJson, printPingResult, saveJson } from "./output.js";
+
+function makeReport(overrides: Partial<ReviewReport> = {}): ReviewReport {
+  return {
+    generatedAt: new Date().toISOString(),
+    model: "test-model",
+    diffSource: "staged changes",
+    summary: "No issues found.",
+    comments: [],
+    stats: { high: 0, medium: 0, low: 0, info: 0, total: 0 },
+    ...overrides,
+  };
+}
 
 function makePingResult(overrides: Partial<PingResult> = {}): PingResult {
   return {
@@ -17,6 +33,55 @@ function makePingResult(overrides: Partial<PingResult> = {}): PingResult {
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+describe("saveJson", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "ai-review-output-test-"));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true });
+  });
+
+  it("writes the report as pretty-printed JSON", () => {
+    const report = makeReport({ summary: "Looks solid overall." });
+    const outputPath = join(dir, "review.json");
+
+    saveJson(report, outputPath);
+
+    const written = readFileSync(outputPath, "utf8");
+    expect(written).toMatch(/\n$/);
+    const parsed = JSON.parse(written) as ReviewReport;
+    expect(parsed.summary).toBe("Looks solid overall.");
+    expect(parsed.model).toBe("test-model");
+    expect(parsed.diffSource).toBe("staged changes");
+  });
+
+  it("round-trips comments and stats", () => {
+    const report = makeReport({
+      comments: [
+        {
+          file: "src/app.ts",
+          line: 12,
+          severity: "high",
+          category: "security",
+          message: "Possible SQL injection.",
+        },
+      ],
+      stats: { high: 1, medium: 0, low: 0, info: 0, total: 1 },
+    });
+    const outputPath = join(dir, "review.json");
+
+    saveJson(report, outputPath);
+
+    const parsed = JSON.parse(readFileSync(outputPath, "utf8")) as ReviewReport;
+    expect(parsed.comments).toHaveLength(1);
+    expect(parsed.comments[0]?.message).toBe("Possible SQL injection.");
+    expect(parsed.stats.high).toBe(1);
+  });
 });
 
 describe("printPingJson", () => {

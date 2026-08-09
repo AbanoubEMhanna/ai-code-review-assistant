@@ -178,6 +178,10 @@ export function saveMarkdown(report: ReviewReport, outputPath: string): void {
   writeFileSync(outputPath, md, "utf8");
 }
 
+export function saveJson(report: ReviewReport, outputPath: string): void {
+  writeFileSync(outputPath, JSON.stringify(report, null, 2) + "\n", "utf8");
+}
+
 export function printJson(report: ReviewReport): void {
   process.stdout.write(JSON.stringify(report, null, 2) + "\n");
 }
