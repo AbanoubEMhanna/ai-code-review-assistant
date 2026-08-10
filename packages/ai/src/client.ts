@@ -137,9 +137,16 @@ export async function reviewDiff(
   } else {
     try {
       raw = await ollamaChat(opts.host, opts.model, messages, maxTokens);
-    } catch {
+    } catch (ollamaErr) {
       // Fall back to OpenAI-compatible endpoint (Ollama also supports this)
-      raw = await chatCompletions(opts.host, opts.model, messages, maxTokens);
+      try {
+        raw = await chatCompletions(opts.host, opts.model, messages, maxTokens);
+      } catch {
+        // The native /api/chat error is usually more specific (e.g. "model not
+        // found, try pulling it first") than the generic fallback failure, so
+        // surface that one instead of the fallback's when both fail.
+        throw ollamaErr instanceof Error ? ollamaErr : new Error(String(ollamaErr));
+      }
     }
   }
 
