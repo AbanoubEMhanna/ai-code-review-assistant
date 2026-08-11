@@ -503,6 +503,37 @@ historyCmd
     }
   });
 
+historyCmd
+  .command("prune")
+  .description("Delete old reviews to keep history from growing unbounded")
+  .option("--older-than <days>", "Delete reviews older than this many days")
+  .option("--keep <number>", "Keep only the N most recent reviews, delete the rest")
+  .action((opts: { olderThan?: string; keep?: string }) => {
+    if (opts.olderThan === undefined && opts.keep === undefined) {
+      console.error("Specify --older-than <days> and/or --keep <number>.");
+      process.exit(1);
+    }
+    const pruneOpts: { maxAgeDays?: number; keep?: number } = {};
+    if (opts.olderThan !== undefined) {
+      const days = Number(opts.olderThan);
+      if (!/^\d+$/.test(opts.olderThan) || !Number.isSafeInteger(days) || days < 1) {
+        console.error(`Invalid --older-than "${opts.olderThan}". Use a positive integer.`);
+        process.exit(1);
+      }
+      pruneOpts.maxAgeDays = days;
+    }
+    if (opts.keep !== undefined) {
+      const n = Number(opts.keep);
+      if (!/^\d+$/.test(opts.keep) || !Number.isSafeInteger(n) || n < 0) {
+        console.error(`Invalid --keep "${opts.keep}". Use a non-negative integer.`);
+        process.exit(1);
+      }
+      pruneOpts.keep = n;
+    }
+    const n = store.prune(pruneOpts);
+    console.log(`Pruned ${n} review(s) from history.`);
+  });
+
 // ─── config subcommand group ───────────────────────────────────────────────
 
 const configCmd = program.command("config").description("Manage ai-review configuration");

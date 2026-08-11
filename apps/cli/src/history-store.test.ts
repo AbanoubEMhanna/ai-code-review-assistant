@@ -118,3 +118,80 @@ describe("ReviewHistoryStore.search()", () => {
     expect(store.search("anything")).toHaveLength(0);
   });
 });
+
+describe("ReviewHistoryStore.prune()", () => {
+  it("does nothing when no options are given", () => {
+    store.save(makeReport());
+    store.save(makeReport());
+    expect(store.prune()).toBe(0);
+    expect(store.list()).toHaveLength(2);
+  });
+
+  it("deletes reviews older than maxAgeDays", () => {
+    const old = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString();
+    const recent = new Date().toISOString();
+    store.save(makeReport({ generatedAt: old, summary: "old" }));
+    store.save(makeReport({ generatedAt: recent, summary: "recent" }));
+
+    const removed = store.prune({ maxAgeDays: 30 });
+
+    expect(removed).toBe(1);
+    const remaining = store.list();
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]?.summary).toBe("recent");
+  });
+
+  it("keeps only the N most recent reviews when keep is set", () => {
+    for (let i = 0; i < 5; i++) {
+      store.save(makeReport());
+    }
+    const removed = store.prune({ keep: 2 });
+    expect(removed).toBe(3);
+    expect(store.list()).toHaveLength(2);
+  });
+
+  it("keeps the reviews with the most recent generatedAt, not just the newest IDs", () => {
+    // IDs are assigned in save() order, but generatedAt here is deliberately
+    // out of order — keep must follow generatedAt, not list()'s ID-based sort.
+    const base = Date.now();
+    const stale = store.save(
+      makeReport({ generatedAt: new Date(base - 3000).toISOString(), summary: "stale" })
+    );
+    const oldest = store.save(
+      makeReport({ generatedAt: new Date(base - 5000).toISOString(), summary: "oldest" })
+    );
+    const newest = store.save(
+      makeReport({ generatedAt: new Date(base).toISOString(), summary: "newest" })
+    );
+
+    const removed = store.prune({ keep: 2 });
+
+    expect(removed).toBe(1);
+    const remainingIds = store.list().map((r) => r.id);
+    expect(remainingIds).toContain(newest.id);
+    expect(remainingIds).toContain(stale.id);
+    expect(remainingIds).not.toContain(oldest.id);
+  });
+
+  it("does not delete anything when keep is >= total review count", () => {
+    store.save(makeReport());
+    store.save(makeReport());
+    expect(store.prune({ keep: 10 })).toBe(0);
+    expect(store.list()).toHaveLength(2);
+  });
+
+  it("combines maxAgeDays and keep without double counting overlaps", () => {
+    const old = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString();
+    store.save(makeReport({ generatedAt: old }));
+    for (let i = 0; i < 3; i++) {
+      store.save(makeReport());
+    }
+    const removed = store.prune({ maxAgeDays: 30, keep: 2 });
+    expect(removed).toBe(2);
+    expect(store.list()).toHaveLength(2);
+  });
+
+  it("returns 0 when store is empty", () => {
+    expect(store.prune({ maxAgeDays: 1, keep: 0 })).toBe(0);
+  });
+});
