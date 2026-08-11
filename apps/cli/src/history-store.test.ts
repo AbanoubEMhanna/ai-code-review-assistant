@@ -150,6 +150,29 @@ describe("ReviewHistoryStore.prune()", () => {
     expect(store.list()).toHaveLength(2);
   });
 
+  it("keeps the reviews with the most recent generatedAt, not just the newest IDs", () => {
+    // IDs are assigned in save() order, but generatedAt here is deliberately
+    // out of order — keep must follow generatedAt, not list()'s ID-based sort.
+    const base = Date.now();
+    const stale = store.save(
+      makeReport({ generatedAt: new Date(base - 3000).toISOString(), summary: "stale" })
+    );
+    const oldest = store.save(
+      makeReport({ generatedAt: new Date(base - 5000).toISOString(), summary: "oldest" })
+    );
+    const newest = store.save(
+      makeReport({ generatedAt: new Date(base).toISOString(), summary: "newest" })
+    );
+
+    const removed = store.prune({ keep: 2 });
+
+    expect(removed).toBe(1);
+    const remainingIds = store.list().map((r) => r.id);
+    expect(remainingIds).toContain(newest.id);
+    expect(remainingIds).toContain(stale.id);
+    expect(remainingIds).not.toContain(oldest.id);
+  });
+
   it("does not delete anything when keep is >= total review count", () => {
     store.save(makeReport());
     store.save(makeReport());

@@ -515,16 +515,16 @@ historyCmd
     }
     const pruneOpts: { maxAgeDays?: number; keep?: number } = {};
     if (opts.olderThan !== undefined) {
-      const days = parseInt(opts.olderThan, 10);
-      if (isNaN(days) || days < 1) {
+      const days = Number(opts.olderThan);
+      if (!/^\d+$/.test(opts.olderThan) || !Number.isSafeInteger(days) || days < 1) {
         console.error(`Invalid --older-than "${opts.olderThan}". Use a positive integer.`);
         process.exit(1);
       }
       pruneOpts.maxAgeDays = days;
     }
     if (opts.keep !== undefined) {
-      const n = parseInt(opts.keep, 10);
-      if (isNaN(n) || n < 0) {
+      const n = Number(opts.keep);
+      if (!/^\d+$/.test(opts.keep) || !Number.isSafeInteger(n) || n < 0) {
         console.error(`Invalid --keep "${opts.keep}". Use a non-negative integer.`);
         process.exit(1);
       }

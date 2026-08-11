@@ -105,7 +105,11 @@ export class ReviewHistoryStore {
     }
 
     if (opts.keep !== undefined && opts.keep >= 0 && all.length > opts.keep) {
-      for (const r of all.slice(opts.keep)) idsToDelete.add(r.id);
+      const byRecency = [...all].sort((a, b) => {
+        const diff = new Date(b.generatedAt).getTime() - new Date(a.generatedAt).getTime();
+        return diff !== 0 ? diff : b.id.localeCompare(a.id);
+      });
+      for (const r of byRecency.slice(opts.keep)) idsToDelete.add(r.id);
     }
 
     let count = 0;
