@@ -35,6 +35,25 @@ describe("parseReview", () => {
     expect(result.summary).toBe("plain");
   });
 
+  it("extracts JSON surrounded by explanatory prose with no fence", () => {
+    const raw =
+      'Sure, here is the review:\n\n{"summary":"ok","comments":[]}\n\nLet me know if you need more detail.';
+    const result = parseReview(raw);
+    expect(result.summary).toBe("ok");
+  });
+
+  it("extracts a fenced JSON block that isn't anchored to the start/end", () => {
+    const raw = 'Here you go:\n```json\n{"summary":"ok","comments":[]}\n```\nHope that helps!';
+    const result = parseReview(raw);
+    expect(result.summary).toBe("ok");
+  });
+
+  it("ignores braces inside string values when locating the JSON object", () => {
+    const raw = 'Explanation first.\n{"summary":"uses a {config} object","comments":[]}\nDone.';
+    const result = parseReview(raw);
+    expect(result.summary).toBe("uses a {config} object");
+  });
+
   it("handles an empty comments array", () => {
     const raw = JSON.stringify({ summary: "No issues.", comments: [] });
     const result = parseReview(raw);

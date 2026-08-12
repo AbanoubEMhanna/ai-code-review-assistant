@@ -71,11 +71,45 @@ function assertRawReviewResult(value: unknown): asserts value is RawReviewResult
   }
 }
 
+/**
+ * Extracts the JSON object from a raw model response. Local models frequently
+ * ignore "respond with only JSON" instructions and wrap the object in
+ * explanatory prose and/or a code fence that isn't anchored to the start/end
+ * of the response, so we locate the object by balanced braces instead of
+ * relying on the response being pure JSON.
+ */
+function extractJsonCandidate(raw: string): string {
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  const body = (fenced?.[1] ?? raw).trim();
+
+  if (body.startsWith("{") && body.endsWith("}")) return body;
+
+  const start = body.indexOf("{");
+  if (start === -1) return body;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < body.length; i++) {
+    const ch = body[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) return body.slice(start, i + 1);
+    }
+  }
+  return body;
+}
+
 export function parseReview(raw: string): RawReviewResult {
-  const cleaned = raw
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/```\s*$/, "")
-    .trim();
+  const cleaned = extractJsonCandidate(raw);
   try {
     const parsed: unknown = JSON.parse(cleaned);
     assertRawReviewResult(parsed);
