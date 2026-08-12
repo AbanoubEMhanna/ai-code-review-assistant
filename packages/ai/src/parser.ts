@@ -71,18 +71,73 @@ function assertRawReviewResult(value: unknown): asserts value is RawReviewResult
   }
 }
 
-export function parseReview(raw: string): RawReviewResult {
-  const cleaned = raw
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/```\s*$/, "")
-    .trim();
-  try {
-    const parsed: unknown = JSON.parse(cleaned);
-    assertRawReviewResult(parsed);
-    return parsed;
-  } catch (err) {
-    throw new Error(
-      `Could not parse AI response as JSON. Reason: ${err instanceof Error ? err.message : String(err)} (raw length: ${raw.length})`
-    );
+/**
+ * Finds the span of a balanced `{...}` object starting at `text[start]`
+ * (which must be "{"), correctly skipping braces inside quoted strings.
+ * Returns the index of the matching closing brace, or -1 if unbalanced.
+ */
+function findMatchingBrace(text: string, start: number): number {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) return i;
+    }
   }
+  return -1;
+}
+
+/**
+ * Locates every balanced `{...}` object in a raw model response, in the
+ * order they appear. Local models frequently ignore "respond with only
+ * JSON" instructions and wrap the object in explanatory prose and/or a code
+ * fence, and that surrounding text can itself contain brace-delimited
+ * content (a code sample, a stray JS object) that isn't the review — so
+ * parseReview tries each candidate in turn rather than only the first.
+ */
+function findJsonObjectCandidates(text: string): string[] {
+  const candidates: string[] = [];
+  let i = 0;
+  while (i < text.length) {
+    if (text[i] === "{") {
+      const end = findMatchingBrace(text, i);
+      if (end === -1) {
+        i++;
+        continue;
+      }
+      candidates.push(text.slice(i, end + 1));
+      i = end + 1;
+    } else {
+      i++;
+    }
+  }
+  return candidates;
+}
+
+export function parseReview(raw: string): RawReviewResult {
+  const candidates = findJsonObjectCandidates(raw);
+  let lastError: unknown;
+  for (const candidate of candidates.length > 0 ? candidates : [raw.trim()]) {
+    try {
+      const parsed: unknown = JSON.parse(candidate);
+      assertRawReviewResult(parsed);
+      return parsed;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw new Error(
+    `Could not parse AI response as JSON. Reason: ${lastError instanceof Error ? lastError.message : String(lastError)} (raw length: ${raw.length})`
+  );
 }
