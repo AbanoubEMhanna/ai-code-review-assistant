@@ -54,6 +54,19 @@ describe("parseReview", () => {
     expect(result.summary).toBe("uses a {config} object");
   });
 
+  it("skips a non-JSON brace-delimited span in prose before the valid review JSON", () => {
+    const raw =
+      'Note: the config is {not: valid json} but here is the actual review:\n{"summary":"ok","comments":[]}';
+    const result = parseReview(raw);
+    expect(result.summary).toBe("ok");
+  });
+
+  it("skips a non-JSON fenced code block before the valid review JSON", () => {
+    const raw = '```js\nconst cfg = { a: 1, b: 2 };\n```\n{"summary":"ok","comments":[]}';
+    const result = parseReview(raw);
+    expect(result.summary).toBe("ok");
+  });
+
   it("handles an empty comments array", () => {
     const raw = JSON.stringify({ summary: "No issues.", comments: [] });
     const result = parseReview(raw);

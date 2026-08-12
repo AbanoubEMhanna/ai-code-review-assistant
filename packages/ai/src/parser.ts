@@ -72,26 +72,16 @@ function assertRawReviewResult(value: unknown): asserts value is RawReviewResult
 }
 
 /**
- * Extracts the JSON object from a raw model response. Local models frequently
- * ignore "respond with only JSON" instructions and wrap the object in
- * explanatory prose and/or a code fence that isn't anchored to the start/end
- * of the response, so we locate the object by balanced braces instead of
- * relying on the response being pure JSON.
+ * Finds the span of a balanced `{...}` object starting at `text[start]`
+ * (which must be "{"), correctly skipping braces inside quoted strings.
+ * Returns the index of the matching closing brace, or -1 if unbalanced.
  */
-function extractJsonCandidate(raw: string): string {
-  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-  const body = (fenced?.[1] ?? raw).trim();
-
-  if (body.startsWith("{") && body.endsWith("}")) return body;
-
-  const start = body.indexOf("{");
-  if (start === -1) return body;
-
+function findMatchingBrace(text: string, start: number): number {
   let depth = 0;
   let inString = false;
   let escaped = false;
-  for (let i = start; i < body.length; i++) {
-    const ch = body[i];
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
     if (inString) {
       if (escaped) escaped = false;
       else if (ch === "\\") escaped = true;
@@ -102,21 +92,52 @@ function extractJsonCandidate(raw: string): string {
     else if (ch === "{") depth++;
     else if (ch === "}") {
       depth--;
-      if (depth === 0) return body.slice(start, i + 1);
+      if (depth === 0) return i;
     }
   }
-  return body;
+  return -1;
+}
+
+/**
+ * Locates every balanced `{...}` object in a raw model response, in the
+ * order they appear. Local models frequently ignore "respond with only
+ * JSON" instructions and wrap the object in explanatory prose and/or a code
+ * fence, and that surrounding text can itself contain brace-delimited
+ * content (a code sample, a stray JS object) that isn't the review — so
+ * parseReview tries each candidate in turn rather than only the first.
+ */
+function findJsonObjectCandidates(text: string): string[] {
+  const candidates: string[] = [];
+  let i = 0;
+  while (i < text.length) {
+    if (text[i] === "{") {
+      const end = findMatchingBrace(text, i);
+      if (end === -1) {
+        i++;
+        continue;
+      }
+      candidates.push(text.slice(i, end + 1));
+      i = end + 1;
+    } else {
+      i++;
+    }
+  }
+  return candidates;
 }
 
 export function parseReview(raw: string): RawReviewResult {
-  const cleaned = extractJsonCandidate(raw);
-  try {
-    const parsed: unknown = JSON.parse(cleaned);
-    assertRawReviewResult(parsed);
-    return parsed;
-  } catch (err) {
-    throw new Error(
-      `Could not parse AI response as JSON. Reason: ${err instanceof Error ? err.message : String(err)} (raw length: ${raw.length})`
-    );
+  const candidates = findJsonObjectCandidates(raw);
+  let lastError: unknown;
+  for (const candidate of candidates.length > 0 ? candidates : [raw.trim()]) {
+    try {
+      const parsed: unknown = JSON.parse(candidate);
+      assertRawReviewResult(parsed);
+      return parsed;
+    } catch (err) {
+      lastError = err;
+    }
   }
+  throw new Error(
+    `Could not parse AI response as JSON. Reason: ${lastError instanceof Error ? lastError.message : String(lastError)} (raw length: ${raw.length})`
+  );
 }
