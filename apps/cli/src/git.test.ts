@@ -62,3 +62,30 @@ describe("getFileDiff()", () => {
     await expect(getFileDiff("tracked.txt")).rejects.toThrow(/No diff found/);
   });
 });
+
+describe("getFileDiff() in a repository with no commits yet (unborn HEAD)", () => {
+  const originalCwd = process.cwd();
+  let repoDir: string;
+
+  beforeEach(async () => {
+    repoDir = mkdtempSync(join(tmpdir(), "ai-review-git-test-unborn-"));
+    process.chdir(repoDir);
+    const git = simpleGit();
+    await git.init();
+    await git.addConfig("user.email", "test@example.com");
+    await git.addConfig("user.name", "Test");
+  });
+
+  afterEach(() => {
+    process.chdir(originalCwd);
+    rmSync(repoDir, { recursive: true, force: true });
+  });
+
+  it("returns an addition diff for an untracked file instead of throwing on missing HEAD", async () => {
+    writeFileSync(join(repoDir, "untracked.txt"), "hello world\n");
+    const { getFileDiff } = await importGitModule();
+    const diff = await getFileDiff("untracked.txt");
+    expect(diff).toContain("new file mode");
+    expect(diff).toContain("+hello world");
+  });
+});

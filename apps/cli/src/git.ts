@@ -25,7 +25,13 @@ export async function getBranchDiff(base: string): Promise<string> {
 }
 
 export async function getFileDiff(filePath: string): Promise<string> {
-  const diff = await git.diff(["HEAD", "--", filePath]);
+  // A brand-new repo has no HEAD yet ("unborn" HEAD); `git diff HEAD` would
+  // throw in that case, so treat it as an empty base instead.
+  const hasHead = await git
+    .revparse(["--verify", "HEAD"])
+    .then(() => true)
+    .catch(() => false);
+  const diff = hasHead ? await git.diff(["HEAD", "--", filePath]) : "";
   if (!diff.trim()) {
     // Try staged diff for the file
     const staged = await git.diff(["--cached", "--", filePath]);
