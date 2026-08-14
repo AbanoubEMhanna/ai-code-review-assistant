@@ -27,4 +27,16 @@ describe("validateHostUrl", () => {
   it("includes the offending value in the error message", () => {
     expect(() => validateHostUrl("banana")).toThrow(/"banana"/);
   });
+
+  it("rejects a URL with embedded credentials", () => {
+    // fetch() throws "Request cannot be constructed from a URL that includes
+    // credentials" for these, defeating the point of validating upfront.
+    expect(() => validateHostUrl("http://user:pass@localhost:11434")).toThrow(
+      /embedded credentials/
+    );
+  });
+
+  it("rejects a URL with only a username", () => {
+    expect(() => validateHostUrl("http://user@localhost:11434")).toThrow(/embedded credentials/);
+  });
 });
