@@ -18,6 +18,7 @@ import type { HistoryStats } from "./output.js";
 import { ReviewHistoryStore } from "./history-store.js";
 import { loadConfig, getConfigFilePath, type AiReviewConfig } from "./config.js";
 import { buildDoctorReport, formatDoctorReport, formatDoctorJson } from "./doctor.js";
+import { validateHostUrl } from "./validate.js";
 
 const fileConfig: AiReviewConfig = loadConfig();
 
@@ -57,6 +58,9 @@ function makeOpts(cmd: {
     throw new Error(
       "Anthropic provider requires an API key. Set ANTHROPIC_API_KEY or pass --api-key <key>."
     );
+  }
+  if (provider !== "anthropic") {
+    validateHostUrl(cmd.host);
   }
   const opts: ReviewOptions = { model: cmd.model, host: cmd.host, provider };
   if (apiKey) opts.apiKey = apiKey;
@@ -254,6 +258,19 @@ program
         }
         process.exit(1);
       }
+      if (provider !== "anthropic") {
+        try {
+          validateHostUrl(opts.host);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          if (!opts.json) {
+            console.error(message);
+          } else {
+            process.stderr.write(JSON.stringify({ error: message }) + "\n");
+          }
+          process.exit(1);
+        }
+      }
       const apiKey = opts.apiKey ?? DEFAULT_API_KEY;
       const pingOpts: Parameters<typeof pingProvider>[0] = {
         provider: provider as ReviewOptions["provider"],
@@ -295,6 +312,14 @@ program
           `Invalid provider "${opts.provider}". Use "ollama", "lmstudio", or "anthropic".`
         );
         process.exit(1);
+      }
+      if (provider !== "anthropic") {
+        try {
+          validateHostUrl(opts.host);
+        } catch (err) {
+          console.error(err instanceof Error ? err.message : String(err));
+          process.exit(1);
+        }
       }
 
       const apiKey = opts.apiKey ?? DEFAULT_API_KEY;
