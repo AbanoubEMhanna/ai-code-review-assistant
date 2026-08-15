@@ -28,6 +28,22 @@ describe("truncateDiff", () => {
     expect(result.truncated).toBe(true);
     expect(result.diff.length).toBe(DEFAULT_MAX_DIFF_CHARS);
   });
+
+  it.each([-1, 0, 2.5, NaN, Infinity, -Infinity])(
+    "falls back to DEFAULT_MAX_DIFF_CHARS for an invalid maxChars (%s)",
+    (invalidLimit) => {
+      const diff = "a".repeat(10);
+      const result = truncateDiff(diff, invalidLimit);
+      expect(result).toEqual({ diff, truncated: false, originalLength: diff.length });
+    }
+  );
+
+  it("falls back to DEFAULT_MAX_DIFF_CHARS and still truncates oversized diffs given an invalid maxChars", () => {
+    const diff = "a".repeat(DEFAULT_MAX_DIFF_CHARS + 1);
+    const result = truncateDiff(diff, NaN);
+    expect(result.truncated).toBe(true);
+    expect(result.diff.length).toBe(DEFAULT_MAX_DIFF_CHARS);
+  });
 });
 
 describe("buildUserPrompt", () => {

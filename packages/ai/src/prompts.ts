@@ -35,10 +35,14 @@ export interface TruncatedDiff {
 }
 
 export function truncateDiff(diff: string, maxChars = DEFAULT_MAX_DIFF_CHARS): TruncatedDiff {
-  if (diff.length <= maxChars) {
+  // Guard against callers passing a non-positive, non-integer, or non-finite
+  // limit (e.g. NaN/-1/2.5) — fall back to the default rather than letting
+  // String.slice() silently produce a nonsensical (often empty) result.
+  const limit = Number.isInteger(maxChars) && maxChars > 0 ? maxChars : DEFAULT_MAX_DIFF_CHARS;
+  if (diff.length <= limit) {
     return { diff, truncated: false, originalLength: diff.length };
   }
-  return { diff: diff.slice(0, maxChars), truncated: true, originalLength: diff.length };
+  return { diff: diff.slice(0, limit), truncated: true, originalLength: diff.length };
 }
 
 export function buildUserPrompt(
