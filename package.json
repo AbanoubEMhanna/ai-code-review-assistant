@@ -29,7 +29,11 @@
       "simple-git-hooks"
     ],
     "overrides": {
-      "vite": ">=7.3.5"
+      "vite": ">=7.3.5",
+      "brace-expansion": ">=5.0.9",
+      "postcss": ">=8.5.18",
+      "nanoid": ">=3.3.18",
+      "js-yaml": ">=4.3.1"
     }
   },
   "lint-staged": {
