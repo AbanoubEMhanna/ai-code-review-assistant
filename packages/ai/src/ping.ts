@@ -43,7 +43,7 @@ async function listAnthropicModels(apiKey: string, timeoutMs: number): Promise<s
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch("https://api.anthropic.com/v1/models", {
+    const res = await fetch("https://api.anthropic.com/v1/models?limit=1000", {
       headers: {
         "x-api-key": apiKey,
         "anthropic-version": "2023-06-01",
