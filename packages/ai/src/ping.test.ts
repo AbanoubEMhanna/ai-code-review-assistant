@@ -179,6 +179,7 @@ describe("pingProvider — anthropic", () => {
     });
     expect(result.ok).toBe(false);
     expect(result.error).toMatch(/Anthropic API error \(401\)/);
+    expect(result.error).toContain("invalid x-api-key");
     expect(result.availableModels).toEqual([]);
   });
 
