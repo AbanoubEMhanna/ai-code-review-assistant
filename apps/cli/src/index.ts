@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { program } from "commander";
 import { reviewDiff, pingProvider } from "@ai-review/ai";
 import type { ReviewOptions, ReviewReport, ReviewSeverity } from "@ai-review/shared";
@@ -13,6 +14,7 @@ import {
   printHistoryStatsJson,
   printPingResult,
   saveMarkdown,
+  saveSarif,
 } from "./output.js";
 import type { HistoryStats } from "./output.js";
 import { ReviewHistoryStore } from "./history-store.js";
@@ -83,10 +85,17 @@ async function runReview(
   diffSource: string,
   opts: ReviewOptions,
   outputFile: string | undefined,
+  sarifFile: string | undefined,
   json: boolean,
   failOn: ReviewSeverity | undefined,
   noSave: boolean
 ): Promise<void> {
+  if (outputFile && sarifFile && resolve(outputFile) === resolve(sarifFile)) {
+    throw new Error(
+      `--output and --sarif must not point to the same file ("${outputFile}"). ` +
+        "Choose two different paths — one write would overwrite the other."
+    );
+  }
   if (!json) {
     console.log(`Reviewing ${diffSource} with ${opts.model} via ${opts.provider} (${opts.host})…`);
   }
@@ -118,6 +127,11 @@ async function runReview(
   if (outputFile) {
     saveMarkdown(report, outputFile);
     if (!json) console.log(`Report saved to ${outputFile}`);
+  }
+
+  if (sarifFile) {
+    saveSarif(report, sarifFile);
+    if (!json) console.log(`SARIF report saved to ${sarifFile}`);
   }
 
   if (!noSave) {
@@ -156,6 +170,7 @@ const sharedOptions = (cmd: ReturnType<typeof program.command>) =>
     .option("-k, --api-key <key>", "API key (Anthropic; or set ANTHROPIC_API_KEY env var)")
     .option("-t, --max-tokens <number>", "Maximum tokens for the AI response (default: 4096)")
     .option("-o, --output <file>", "Save Markdown report to file")
+    .option("--sarif <file>", "Save SARIF report to file (for GitHub code scanning, etc.)")
     .option("--json", "Output review as JSON (suppresses formatted output)")
     .option(
       "--fail-on <severity>",
@@ -168,6 +183,7 @@ type SharedOpts = {
   host: string;
   provider: string;
   output?: string;
+  sarif?: string;
   maxTokens?: string;
   apiKey?: string;
   json?: boolean;
@@ -184,6 +200,7 @@ sharedOptions(program.command("staged").description("Review staged changes (git 
       "staged changes",
       makeOpts(opts),
       opts.output,
+      opts.sarif,
       !!opts.json,
       failOn,
       !opts.save
@@ -201,6 +218,7 @@ sharedOptions(
     `diff vs ${base}`,
     makeOpts(opts),
     opts.output,
+    opts.sarif,
     !!opts.json,
     failOn,
     !opts.save
@@ -217,6 +235,7 @@ sharedOptions(
     `file: ${filePath}`,
     makeOpts(opts),
     opts.output,
+    opts.sarif,
     !!opts.json,
     failOn,
     !opts.save

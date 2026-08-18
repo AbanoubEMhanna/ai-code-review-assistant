@@ -178,6 +178,61 @@ export function saveMarkdown(report: ReviewReport, outputPath: string): void {
   writeFileSync(outputPath, md, "utf8");
 }
 
+const SARIF_LEVEL: Record<
+  ReviewReport["comments"][number]["severity"],
+  "error" | "warning" | "note"
+> = {
+  high: "error",
+  medium: "warning",
+  low: "note",
+  info: "note",
+};
+
+export function buildSarif(report: ReviewReport): object {
+  const rules = [...new Set(report.comments.map((c) => c.category))].map((category) => ({
+    id: category,
+    name: category,
+    shortDescription: { text: category },
+  }));
+
+  const results = report.comments.map((c) => ({
+    ruleId: c.category,
+    level: SARIF_LEVEL[c.severity],
+    message: { text: c.suggestion ? `${c.message}\n\nSuggestion: ${c.suggestion}` : c.message },
+    locations: [
+      {
+        physicalLocation: {
+          artifactLocation: { uri: c.file },
+          ...(c.line != null ? { region: { startLine: c.line } } : {}),
+        },
+      },
+    ],
+  }));
+
+  return {
+    $schema:
+      "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+    version: "2.1.0",
+    runs: [
+      {
+        tool: {
+          driver: {
+            name: "ai-code-review-assistant",
+            informationUri: "https://github.com/AbanoubEMhanna/ai-code-review-assistant",
+            version: "0.1.0",
+            rules,
+          },
+        },
+        results,
+      },
+    ],
+  };
+}
+
+export function saveSarif(report: ReviewReport, outputPath: string): void {
+  writeFileSync(outputPath, JSON.stringify(buildSarif(report), null, 2) + "\n", "utf8");
+}
+
 export function printJson(report: ReviewReport): void {
   process.stdout.write(JSON.stringify(report, null, 2) + "\n");
 }
