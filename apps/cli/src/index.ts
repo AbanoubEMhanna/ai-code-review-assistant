@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { program } from "commander";
 import { reviewDiff, pingProvider } from "@ai-review/ai";
 import type { ReviewOptions, ReviewReport, ReviewSeverity } from "@ai-review/shared";
@@ -89,6 +90,12 @@ async function runReview(
   failOn: ReviewSeverity | undefined,
   noSave: boolean
 ): Promise<void> {
+  if (outputFile && sarifFile && resolve(outputFile) === resolve(sarifFile)) {
+    throw new Error(
+      `--output and --sarif must not point to the same file ("${outputFile}"). ` +
+        "Choose two different paths — one write would overwrite the other."
+    );
+  }
   if (!json) {
     console.log(`Reviewing ${diffSource} with ${opts.model} via ${opts.provider} (${opts.host})…`);
   }
