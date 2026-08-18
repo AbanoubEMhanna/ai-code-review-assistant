@@ -60,6 +60,9 @@ node apps/cli/dist/index.js file src/app.ts
 
 # Save a Markdown report
 node apps/cli/dist/index.js staged --output review.md
+
+# Save a SARIF report (for GitHub code scanning, etc.)
+node apps/cli/dist/index.js staged --sarif review.sarif
 ```
 
 **Options** (all commands):
@@ -70,6 +73,7 @@ node apps/cli/dist/index.js staged --output review.md
 | `-H, --host`     | `http://localhost:11434` | AI host URL                  |
 | `-p, --provider` | `ollama`                 | `ollama` or `lmstudio`       |
 | `-o, --output`   | —                        | Save report to Markdown file |
+| `--sarif`        | —                        | Save report to SARIF file    |
 
 **Using LM Studio:**
 
